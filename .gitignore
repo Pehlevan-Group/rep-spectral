@@ -164,6 +164,7 @@ cython_debug/
 
 # data
 data/*
+notebook/*
 !data/.gitkeep
 
 # model
