@@ -12,7 +12,7 @@ from torch.optim import SGD
 from torch.utils.tensorboard import SummaryWriter
 
 # load file
-from model import SLP, cross_lipschitz_regulerizer, volume_element_regularizer
+from model import SLP, cross_lipschitz_regulerizer, volume_element_regularizer, top_eig_regularizer
 from utils import load_config
 
 # arguments
@@ -26,9 +26,11 @@ parser.add_argument("--test-size", default=0.5, type=float, help='the proportion
 parser.add_argument('--hidden-dim', default=20, type=int, help='the number of hidden units')
 parser.add_argument('--lr', default=0.1, type=float, help='learning rate')
 parser.add_argument("--nl", default='Sigmoid', type=str, help='the nonlinearity of first layer')
+parser.add_argument("--wd", default=0, type=float, help='weight decay')
 parser.add_argument('--lam', default=1, type=float, help='the multiplier / strength of regularization')
 parser.add_argument('--reg', default=None, type=str, help='the type of regularization')
-parser.add_argument('--sample-size', default=50, type=int, help='the number of samples for vol element reg')
+parser.add_argument('--sample-size', default=None, type=float, 
+    help='the proportion of top samples for regularization (regularize samples with top eigenvalues or vol element)')
 parser.add_argument("--epochs", default=1200, type=int, help='the number of epochs for training')
 parser.add_argument('--burnin', default=600, type=int, help='the period before which no regularization is imposed')
 
@@ -47,7 +49,9 @@ paths = load_config(args.tag)
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 # set up summary writer
-log_name = f'{args.data}_step{args.step}_ts{args.test_size}_w{args.hidden_dim}_lr{args.lr}_nl{args.nl}_lam{args.lam}_reg{args.reg}_e{args.epochs}_b{args.burnin}_seed{args.seed}'
+log_name = f'{args.data}_step{args.step}_ts{args.test_size}_w{args.hidden_dim}' + \
+           f'_lr{args.lr}_wd{args.wd}_nl{args.nl}_lam{args.lam}_reg{args.reg}' + \
+           f'_ss{args.sample_size}_e{args.epochs}_b{args.burnin}_seed{args.seed}'
 model_path = os.makedirs(os.path.join(paths['model_dir'], log_name), exist_ok=True)
 writer = SummaryWriter(os.path.join(paths['result_dir'], log_name))
 
@@ -75,7 +79,7 @@ nl = getattr(nn, args.nl)()
 model = SLP(width=args.hidden_dim, nl=nl).to(device)
 
 # get optimizer
-opt = SGD(model.parameters(), lr=args.lr)
+opt = SGD(model.parameters(), lr=args.lr, weight_decay=args.wd)
 
 def train():
     """
@@ -113,19 +117,21 @@ def train():
             if args.reg == 'cross-lip':
                 reg_loss = cross_lipschitz_regulerizer(model, X_train, is_binary=True)
             elif args.reg == 'vol':
-                reg_loss = volume_element_regularizer(model, X_train)
-            elif args.reg == 'vol-sample':
-                X_train_samples = X_train[torch.randperm(len(X_train))[:int(args.sample_size * len(X_train))]]
-                reg_loss = volume_element_regularizer(model, X_train_samples)
-            elif args.reg == 'weight': # equivalent to weight decay
-                reg_loss = list(model.lin1.parameters())[0].norm(dim=1).square().mean()
-            elif args.reg == 'vol-weight':
-                reg_loss = list(model.lin1.parameters())[0].norm(dim=1).square().mean() * \
-                    volume_element_regularizer(model, X_train)
-            elif args.reg == 'vol-sample-weight':
-                X_train_samples = X_train[torch.randperm(len(X_train))[:int(args.sample_size * len(X_train))]]
-                reg_loss = list(model.lin1.parameters())[0].norm(dim=1).square().mean() * \
-                    volume_element_regularizer(model, X_train_samples)
+                reg_loss = volume_element_regularizer(model, X_train, sample_size=args.sample_size)
+            # elif args.reg == 'vol-sample':
+            #     X_train_samples = X_train[torch.randperm(len(X_train))[:int(args.sample_size)]]
+            #     reg_loss = volume_element_regularizer(model, X_train_samples)
+            # elif args.reg == 'weight': # equivalent to weight decay
+            #     reg_loss = list(model.lin1.parameters())[0].norm(dim=1).square().mean()
+            # elif args.reg == 'vol-weight':
+            #     reg_loss = list(model.lin1.parameters())[0].norm(dim=1).square().mean() * \
+            #         volume_element_regularizer(model, X_train)
+            # elif args.reg == 'vol-sample-weight':
+            #     X_train_samples = X_train[torch.randperm(len(X_train))[:int(args.sample_size)]]
+            #     reg_loss = list(model.lin1.parameters())[0].norm(dim=1).square().mean() * \
+            #         volume_element_regularizer(model, X_train_samples)
+            elif args.reg == 'eig':
+                reg_loss = top_eig_regularizer(model, X_train, sample_size=args.sample_size)
         else:
             reg_loss = 0
         
