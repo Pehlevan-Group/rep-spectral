@@ -5,7 +5,12 @@ some regularizers
 # load packages
 import torch
 import torch.nn as nn
+import torch.autograd.functional as fnc
 from torch.autograd.functional import jacobian
+
+# ===============================================
+# ================== analytic ===================
+# ===============================================
 
 # ========== reg 1: cross lipschitz =============
 def cross_lipschitz_regulerizer(model: nn.Module, X: torch.Tensor, is_binary: bool=True) -> float:
@@ -117,4 +122,69 @@ def top_eig_regularizer(model: nn.Module, X: torch.Tensor, sample_size: float=No
         reg_terms, _ = torch.topk(reg_terms, int(sample_size * len(reg_terms)), dim=0, sorted=False)
         reg_term = reg_terms.sum()
 
+    return reg_term
+
+
+# ========================================
+# =========== autograd ===================
+# ========================================
+
+def batch_jacobian(f, x):
+    """
+    efficient jacobian computation of feature map f with respect to input x
+
+    the output is of shape (feature_dim, batch_size, *input_dim)
+    For example, if input x is (2, 10), then output is (feature_dim, 2, 10)
+                 if input x is (2, 3, 32, 32), then the output is (feature_dim, 2, 3, 32, 32)
+    """
+    f_sum = lambda x: torch.sum(f(x), axis=0)
+    return fnc.jacobian(f_sum, x, create_graph=True)
+
+def volume_element_regularizer_autograd(x: torch.Tensor, feature_map: nn.Module, sample_size: float=None, m: int=None):
+    """
+    autograd computation of volume element (using SVD)
+
+    :param m: the number of singular values to keep at each sample
+    """
+    # TODO: check numerical stability
+    # directly from jacobian (time efficient)
+    J = batch_jacobian(feature_map, x).flatten(start_dim=2)  # flatten starting from the input dim
+    width = J.shape[0]
+    J = J.permute(1, 2, 0) / width ** (1 / 2)  # manual normalization
+    
+    # take log for numerical stability
+    log_svdvals = torch.linalg.svdvals(J).log()
+    
+    # keep only the top m eigenvalues
+    if m is not None:
+        log_svdvals = log_svdvals[:, :m]
+    
+    # aggregate 
+    reg_terms = torch.exp(log_svdvals.sum(dim=-1) * 2)
+
+    if sample_size is None:
+        reg_term = reg_terms.sum()
+    else:
+        reg_terms, _ = torch.topk(reg_terms, int(sample_size * len(reg_terms)), dim=0, sorted=False)
+        reg_term = reg_terms.sum()
+
+    return reg_term
+
+def top_eig_regularizer_autograd(x: torch.Tensor, feature_map: nn.Module, sample_size: float=None):
+    """
+    autograd computation of top eigenvalue (using lobpcg)
+    """
+    # compute metric
+    J = batch_jacobian(feature_map, x).flatten(start_dim=2)  # flatten starting from the input dim
+    width = J.shape[0]
+    met = J.permute(1, 2, 0) @ J.permute(1, 0, 2) / width # manual normalization
+    top_eigs, _ = torch.lobpcg(met, k=1, largest=True)
+
+    # sampling
+    if sample_size is None:
+        reg_term = top_eigs.sum()
+    else:
+        reg_terms, _ = torch.topk(reg_terms, int(sample_size * len(reg_terms)), dim=0, sorted=False)
+        reg_term = reg_terms.sum()
+    
     return reg_term
