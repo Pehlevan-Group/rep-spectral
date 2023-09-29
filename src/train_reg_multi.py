@@ -44,6 +44,7 @@ parser.add_argument('--burnin', default=600, type=int, help='the period before w
 
 # logging
 parser.add_argument('--log-epoch', default=100, type=int, help='logging frequency')
+parser.add_argument('--log-model', default=10, type=int, help='model logging frequency')
 
 # technical
 parser.add_argument('--tag', default='exp', type=str, help='the tag of batch of exp')
@@ -166,10 +167,10 @@ def train():
             pbar.set_description(f"epoch {i}")
             pbar.set_postfix(
                 {'tr_loss': train_loss.item(), 'tr_acc': train_acc.item(), 'te_loss': test_loss.item(), 'te_acc': test_acc.item()})
-
-    # log final model
-    torch.save(model.state_dict(), os.path.join(paths['model_dir'], log_name, 'model.pt'))
-    print('final model saved!')
+        
+        if i % args.log_model == 0:
+            # log final model
+            torch.save(model.state_dict(), os.path.join(paths['model_dir'], log_name, f'model_e{i}.pt'))
 
 
 def main():
