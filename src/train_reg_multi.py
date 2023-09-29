@@ -48,6 +48,7 @@ parser.add_argument('--log-epoch', default=100, type=int, help='logging frequenc
 # technical
 parser.add_argument('--tag', default='exp', type=str, help='the tag of batch of exp')
 parser.add_argument('--seed', default=401, type=int, help='the random init seed')
+parser.add_argument('--scanbatchsize', default=20, type=int, help='the number of samples to batch compute jacobian for')
 args = parser.parse_args()
 
 torch.manual_seed(args.seed)
@@ -115,9 +116,19 @@ def train():
                 if args.reg == 'cross-lip':
                     reg_loss = cross_lipschitz_regulerizer(model, X_train, is_binary=False)
                 elif args.reg == 'vol':
-                    reg_loss = volume_element_regularizer_autograd(X_train, model.feature_map, sample_size=args.sample_size, m=args.m)
+                    reg_loss = volume_element_regularizer_autograd(
+                        X_train, model.feature_map, 
+                        sample_size=args.sample_size, m=args.m, scanbatchsize=args.scanbatchsize
+                    )
                 elif args.reg == 'eig':
-                    reg_loss = top_eig_regularizer_autograd(X_train, model.feature_map, sample_size=args.sample_size)
+                    reg_loss = top_eig_regularizer_autograd(
+                        X_train, model.feature_map, 
+                        sample_size=args.sample_size, scanbatchsize=args.scanbatchsize
+                    )
+                    # reg_loss = volume_element_regularizer_autograd(
+                    #     X_train, model.feature_map, 
+                    #     sample_size=args.sample_size, m=1, scanbatchsize=args.scanbatchsize
+                    # )
         
             # step
             train_loss += reg_loss * args.lam

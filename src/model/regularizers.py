@@ -3,6 +3,7 @@ some regularizers
 """
 
 # load packages
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.autograd.functional as fnc
@@ -140,26 +141,37 @@ def batch_jacobian(f, x):
     f_sum = lambda x: torch.sum(f(x), axis=0)
     return fnc.jacobian(f_sum, x, create_graph=True)
 
-def volume_element_regularizer_autograd(x: torch.Tensor, feature_map: nn.Module, sample_size: float=None, m: int=None):
+def volume_element_regularizer_autograd(x: torch.Tensor, feature_map: nn.Module, sample_size: float=None, m: int=None, scanbatchsize: int=20):
     """
     autograd computation of volume element (using SVD)
+    for memory reasons, we loop through samller batch size for jacobian computations
 
     :param m: the number of singular values to keep at each sample
+    :param scanbatchsize: the scan size for each batch jacobian computation
     """
-    # TODO: check numerical stability
     # directly from jacobian (time efficient)
-    J = batch_jacobian(feature_map, x).flatten(start_dim=2)  # flatten starting from the input dim
-    width = J.shape[0]
-    J = J.permute(1, 2, 0) / width ** (1 / 2)  # manual normalization
-    
-    # take log for numerical stability
-    log_svdvals = torch.linalg.svdvals(J).log()
-    
-    # keep only the top m eigenvalues
-    if m is not None:
-        log_svdvals = log_svdvals[:, :m]
-    
+    num_loops = int(np.ceil(x.shape[0] / scanbatchsize))
+    log_svdvals_list = []
+    for l in range(num_loops):
+        cur_batch = x[l * scanbatchsize: (l + 1) * scanbatchsize]
+        # get batch jacobian
+        J = batch_jacobian(feature_map, cur_batch).flatten(start_dim=2)  # flatten starting from the input dim
+        width = J.shape[0]
+        J = J.permute(1, 2, 0) / width ** (1 / 2)  # manual normalization
+        
+        # take log for numerical stability
+        log_svdvals = torch.linalg.svdvals(J).log()
+        
+        # keep only the top m eigenvalues
+        if m is not None:
+            log_svdvals = log_svdvals[:, :m]
+
+        log_svdvals_list.append(log_svdvals) 
+    # concat
+    log_svdvals = torch.concat(log_svdvals_list)
+
     # aggregate 
+    # TODO: check numerical stability
     reg_terms = torch.exp(log_svdvals.sum(dim=-1) * 2)
 
     if sample_size is None:
@@ -170,19 +182,30 @@ def volume_element_regularizer_autograd(x: torch.Tensor, feature_map: nn.Module,
 
     return reg_term
 
-def top_eig_regularizer_autograd(x: torch.Tensor, feature_map: nn.Module, sample_size: float=None):
+def top_eig_regularizer_autograd(x: torch.Tensor, feature_map: nn.Module, sample_size: float=None, scanbatchsize: int=20):
     """
     autograd computation of top eigenvalue (using lobpcg)
+    for memory reasons, we split into smaller batch size for jacobian computationss
+    
+    :param scanbatchsize: the batch size for batched jacobian  
     """
-    # compute metric
-    J = batch_jacobian(feature_map, x).flatten(start_dim=2)  # flatten starting from the input dim
-    width = J.shape[0]
-    met = J.permute(1, 2, 0) @ J.permute(1, 0, 2) / width # manual normalization
-    top_eigs, _ = torch.lobpcg(met, k=1, largest=True)
+    num_loops = int(np.ceil(x.shape[0] / scanbatchsize))
+    eig_list = []
+    for l in range(num_loops): 
+        # compute metric
+        cur_scan = x[l*scanbatchsize : (l+1) * scanbatchsize]
+        J = batch_jacobian(feature_map, cur_scan).flatten(start_dim=2)  # flatten starting from the input dim
+        width = J.shape[0]
+        met = J.permute(1, 2, 0) @ J.permute(1, 0, 2) / width # manual normalization
+        # eigs, _ = torch.lobpcg(met, k=1, largest=True)
+        eigs = torch.linalg.eigvalsh(met)[:, :1] # * more numerically stable than lobpcg
+        eig_list.append(eigs)
+
+    reg_terms = torch.concat(eig_list)
 
     # sampling
     if sample_size is None:
-        reg_term = top_eigs.sum()
+        reg_term = reg_terms.sum()
     else:
         reg_terms, _ = torch.topk(reg_terms, int(sample_size * len(reg_terms)), dim=0, sorted=False)
         reg_term = reg_terms.sum()
