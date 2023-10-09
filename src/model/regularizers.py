@@ -21,6 +21,7 @@ def cross_lipschitz_regulerizer(model: nn.Module, X: torch.Tensor, is_binary: bo
 
     Here we use 2-norm squarred
     """
+    # TODO: fix multiclass case
     sig = nn.Sigmoid()
     grad = jacobian(lambda x: sig(model(x)).sum(axis=0), X, create_graph=True).flatten(start_dim=2)
 
@@ -147,8 +148,12 @@ def volume_element_regularizer_autograd(x: torch.Tensor, feature_map: nn.Module,
     for memory reasons, we loop through samller batch size for jacobian computations
 
     :param m: the number of singular values to keep at each sample
+    :param sample_size: the proportion of samples to take volume element evaluations at
     :param scanbatchsize: the scan size for each batch jacobian computation
     """
+    # downsample 
+    x = x[torch.randperm(len(x))[:int(sample_size * len(x))]]
+
     # directly from jacobian (time efficient)
     num_loops = int(np.ceil(x.shape[0] / scanbatchsize))
     log_svdvals_list = []
@@ -173,12 +178,7 @@ def volume_element_regularizer_autograd(x: torch.Tensor, feature_map: nn.Module,
     # aggregate 
     # TODO: check numerical stability
     reg_terms = torch.exp(log_svdvals.sum(dim=-1) * 2)
-
-    if sample_size is None:
-        reg_term = reg_terms.sum()
-    else:
-        reg_terms, _ = torch.topk(reg_terms, int(sample_size * len(reg_terms)), dim=0, sorted=False)
-        reg_term = reg_terms.sum()
+    reg_term = reg_terms.sum()
 
     return reg_term
 
@@ -187,8 +187,12 @@ def top_eig_regularizer_autograd(x: torch.Tensor, feature_map: nn.Module, sample
     autograd computation of top eigenvalue (using lobpcg)
     for memory reasons, we split into smaller batch size for jacobian computationss
     
+    :param sample_size: the proportion of samples to take eigenvalues at 
     :param scanbatchsize: the batch size for batched jacobian  
     """
+    # downsample 
+    x = x[torch.randperm(len(x))[:int(sample_size * len(x))]]
+
     num_loops = int(np.ceil(x.shape[0] / scanbatchsize))
     eig_list = []
     for l in range(num_loops): 
@@ -202,12 +206,6 @@ def top_eig_regularizer_autograd(x: torch.Tensor, feature_map: nn.Module, sample
         eig_list.append(eigs)
 
     reg_terms = torch.concat(eig_list)
-
-    # sampling
-    if sample_size is None:
-        reg_term = reg_terms.sum()
-    else:
-        reg_terms, _ = torch.topk(reg_terms, int(sample_size * len(reg_terms)), dim=0, sorted=False)
-        reg_term = reg_terms.sum()
+    reg_term = reg_terms.sum()
     
     return reg_term

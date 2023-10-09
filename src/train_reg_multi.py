@@ -1,7 +1,9 @@
 """
 train multiclass classification with regularization
-
 Here we will use dataloader for batch training
+
+to reduce runtime, we first train the model without a regularization,
+and then read the model at some timestamp to train with regularizers
 """
 
 # load packages
@@ -41,6 +43,7 @@ parser.add_argument('--sample-size', default=None, type=float,
 parser.add_argument("--m", default=None, type=int, help='vol element specific: keep the top m singular values to regularize only')
 parser.add_argument("--epochs", default=1200, type=int, help='the number of epochs for training')
 parser.add_argument('--burnin', default=600, type=int, help='the period before which no regularization is imposed')
+parser.add_argument('--reg-freq', default=5, type=int, help='the freqency of imposing regularizations')
 
 # logging
 parser.add_argument('--log-epoch', default=100, type=int, help='logging frequency')
@@ -61,7 +64,10 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 # set up summary writer
 log_name = f'{args.data}_step{args.step}_ts{args.test_size}_w{args.hidden_dim}_bs{args.batch_size}' + \
            f'_lr{args.lr}_wd{args.wd}_nl{args.nl}_lam{args.lam}_reg{args.reg}' + (f'_m{args.m}' if args.reg == 'vol' else '') + \
-           f'_ss{args.sample_size}_e{args.epochs}_b{args.burnin}_seed{args.seed}'
+           f'_ss{args.sample_size}_e{args.epochs}_b{args.burnin}_seed{args.seed}_rf{args.reg_freq}'
+base_log_name = f'{args.data}_step{args.step}_ts{args.test_size}_w{args.hidden_dim}_bs{args.batch_size}' + \
+           f'_lr{args.lr}_wd{args.wd}_nl{args.nl}_lam1_regNone' + \
+           f'_ssNone_e{args.epochs}_b600_seed{args.seed}'
 model_path = os.makedirs(os.path.join(paths['model_dir'], log_name), exist_ok=True)
 writer = SummaryWriter(os.path.join(paths['result_dir'], log_name))
 
@@ -94,11 +100,22 @@ weights_init(model)
 opt = Adam(model.parameters(), lr=args.lr, weight_decay=args.wd)
 
 def train():
-    """
-    full batch training
-    """
+    """train a model with/without regularization"""
     loss_fn = nn.CrossEntropyLoss()
-    pbar = tqdm(range(args.epochs + 1)) 
+    
+    # initialize 
+    if args.reg is None:
+        pbar = tqdm(range(args.epochs + 1)) 
+    else:
+        # start training from burnin 
+        pbar = tqdm(range(args.burnin, args.epochs + 1))
+        
+        # load model
+        model.load_state_dict(
+            torch.load(os.path.join(paths['model_dir'], base_log_name, f'model_e{args.burnin}.pt'),
+            map_location=device),
+        )
+
     for i in pbar:
         model.train()
         total_train_loss, total_train_acc = 0, 0
@@ -113,7 +130,7 @@ def train():
             
             # regularization
             reg_loss = 0
-            if i > args.burnin:
+            if i > args.burnin and i % args.reg_freq == 0:
                 if args.reg == 'cross-lip':
                     reg_loss = cross_lipschitz_regulerizer(model, X_train, is_binary=False)
                 elif args.reg == 'vol':
@@ -126,10 +143,6 @@ def train():
                         X_train, model.feature_map, 
                         sample_size=args.sample_size, scanbatchsize=args.scanbatchsize
                     )
-                    # reg_loss = volume_element_regularizer_autograd(
-                    #     X_train, model.feature_map, 
-                    #     sample_size=args.sample_size, m=1, scanbatchsize=args.scanbatchsize
-                    # )
         
             # step
             train_loss += reg_loss * args.lam
