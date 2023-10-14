@@ -115,7 +115,7 @@ def train():
         # regularization
         if i > args.burnin:
             if args.reg == 'cross-lip':
-                reg_loss = cross_lipschitz_regulerizer(model, X_train, is_binary=True)
+                reg_loss = cross_lipschitz_regulerizer(model, X_train, is_binary=True, sample_size=args.sample_size)
             elif args.reg == 'vol':
                 reg_loss = volume_element_regularizer(model, X_train, sample_size=args.sample_size)
             # elif args.reg == 'vol-sample':

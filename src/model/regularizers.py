@@ -14,16 +14,23 @@ from torch.autograd.functional import jacobian
 # ===============================================
 
 # ========== reg 1: cross lipschitz =============
-def cross_lipschitz_regulerizer(model: nn.Module, X: torch.Tensor, is_binary: bool=True) -> float:
+def cross_lipschitz_regulerizer(model: nn.Module, x: torch.Tensor, is_binary: bool=True, sample_size: float=None) -> float:
     """
     Cross-Lipschitz Regulerization: controlling the magnitude of gradient wrt inputs
     source: https://arxiv.org/abs/1705.08475
 
     Here we use 2-norm squarred
+    :param model: pytorch Module
+    :param X: inputs
+    :param is_binary: indicator for binary classification (output dim = 1) or multiclass classification 
+    :param sample_size: None to keep full samples, otherwise downsampled
     """
-    # TODO: fix multiclass case
-    sig = nn.Sigmoid()
-    grad = jacobian(lambda x: sig(model(x)).sum(axis=0), X, create_graph=True).flatten(start_dim=2)
+    if sample_size is not None:
+        # downsample 
+        x = x[torch.randperm(len(x))[:int(sample_size * len(x))]]
+    
+    to_logits = nn.Sigmoid() if is_binary else nn.Softmax(dim=-1)
+    grad = jacobian(lambda x: to_logits(model(x)).sum(axis=0), x, create_graph=True).flatten(start_dim=2)
 
     if is_binary:
         # already a difference between two logits -> return gradient norm
