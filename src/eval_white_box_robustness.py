@@ -54,6 +54,7 @@ paths = load_config(args.tag)
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 # set up summary writer
+# TODO: fix name
 log_name = f'{args.data}_step{args.step}_ts{args.test_size}_w{args.hidden_dim}' + \
            f'_lr{args.lr}_wd{args.wd}_nl{args.nl}_lam{args.lam}_reg{args.reg}' + \
            f'_ss{args.sample_size}_e{args.epochs}_b{args.burnin}_seed{args.seed}'
