@@ -33,9 +33,9 @@ parser.add_argument('--hidden-dim', default=20, type=int, help='the number of hi
 parser.add_argument('--batch-size', default=1024, type=int, help='the batchsize for training')
 parser.add_argument('--lr', default=0.1, type=float, help='learning rate')
 parser.add_argument("--nl", default='Sigmoid', type=str, help='the nonlinearity of first layer')
-parser.add_argument("--wd", default=0, type=float, help='weight decay')
+parser.add_argument("--wd", default=0., type=float, help='weight decay')
 parser.add_argument('--lam', default=1, type=float, help='the multiplier / strength of regularization')
-parser.add_argument('--reg', default=None, type=str, help='the type of regularization')
+parser.add_argument('--reg', default="None", type=str, help='the type of regularization')
 parser.add_argument('--sample-size', default=None, type=float, 
     help='the proportion of top samples for regularization (regularize samples with top eigenvalues or vol element)')
 parser.add_argument("--m", default=None, type=int, help='vol element specific: keep the top m singular values to regularize only')
@@ -99,7 +99,11 @@ print(f'{args.data} data loaded')
 # get model
 nl = getattr(nn, args.nl)()
 model = SLP(input_dim=784, width=args.hidden_dim, output_dim=10, nl=nl).to(device)
-model.load_state_dict(torch.load(os.path.join(paths['model_dir'], log_name, f'model_e{args.eval_epoch}.pt'), map_location=device))
+model.load_state_dict(
+    torch.load(
+        os.path.join(paths['model_dir'], base_log_name if args.reg == "None" else log_name, f'model_e{args.eval_epoch}.pt'
+    ), map_location=device)
+)
 
 # get attacker
 def get_attacker():
@@ -113,7 +117,7 @@ def get_attacker():
 Attacker = get_attacker()
 
 # get samples
-@torch.no_grad
+@torch.no_grad()
 def get_samples():
     """
     filter on test sample with correct predictions
@@ -124,14 +128,16 @@ def get_samples():
     for X, y in test_loader:
         X, y = X.to(device), y.to(device)
         y_pred = model(X).argmax(dim=-1)
-        torch.cat([correct_samples, X[y_pred.eq(y)]])
+
+        # collect correct samples in CPU
+        correct_samples = torch.cat([correct_samples, X[y_pred.eq(y)].to('cpu')])
 
         if len(correct_samples) >= args.eval_sample_size: break
     
     correct_samples = correct_samples[:args.eval_sample_size]
     return correct_samples
 
-@torch.no_grad
+@torch.no_grad()
 def attack_all(samples: torch.Tensor):
     """
     perform adversarial attck on correctly predicted samples
@@ -141,6 +147,8 @@ def attack_all(samples: torch.Tensor):
     """
     dists = []
     for sample in tqdm(samples):
+        # keep first dimension the batch dimension
+        sample = sample.unsqueeze(dim=0).to(device)
         attacker = Attacker(model, sample, None, args.tol, vmin=0, vmax=1, T=args.T)
         perturbed_sample = attacker.attack(None)
 
@@ -153,11 +161,11 @@ def record(dists: List[float]):
     """dump computed distance to files"""
     series = pd.Series(dists)
     series.to_csv(
-        os.path.join(paths['result_dir'], log_name, 
+        os.path.join(paths['result_dir'],  base_log_name if args.reg == "None" else log_name, 
         f'black_box_l2_e{args.eval_epoch}_{args.attacker}_tar{args.target}_T{args.T}_tol{args.tol}.csv')
     )
 
-@torch.no_grad
+@torch.no_grad()
 def main():
     samples = get_samples()
     dists = attack_all(samples)

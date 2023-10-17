@@ -17,6 +17,27 @@ class Attacker:
     def __init__(self) -> None:
         pass
     
+    def check_attack_success(self, new_sample: torch.Tensor, true_label: int, target_label: int) -> bool:
+        """
+        check if an attack is successful 
+        - targeted: sucess if new sample has target_label
+        - untargeted: sicess if new sample does not have true label
+
+        :param sample: the proposed perturbation
+        :param true_label: the true label 
+        :param target_label: None for untargeted attack
+        :return True if the attack is sucessful
+        """
+        # check prediction
+        new_sample_pred = self.model(new_sample).argmax(dim=-1).item()
+        
+        # untargeted
+        if target_label is None:
+            is_sucess = new_sample_pred != true_label
+        else:
+            is_sucess = new_sample_pred == target_label
+        return is_sucess
+
     def binary_search(self, x_adv: torch.Tensor, tol: float=1e-5) -> torch.Tensor:
         """
         binary search to find a sample at the decision boundary
@@ -26,13 +47,11 @@ class Attacker:
         :param tol: a tolerance level (for l2-norm measure)
         :return a sample at the adversarial boundary
         """
-        y_adv = self.model(x_adv).argmax(dim=-1).item()
         l, r = 0, 1
         while r - l > tol:
             mid = (l + r) / 2
             x_mid = (1 - mid) * self.x + mid * x_adv
-            y_mid = self.model(x_mid).argmax(dim=-1).item()
-            if y_mid == y_adv:
+            if self.check_attack_success(x_mid, self.y, self.y_target):
                 r = mid
             else:
                 l = mid
@@ -60,7 +79,20 @@ class TangentAttack(Attacker):
             max_num_evals: int=10000
         ) -> None:
         """
-        # TODO
+        Initialize tangent attacker
+
+        The number of random direction proposals to be made for finding an appropriate normal direction 
+        scales with square root of the number of iterations, and upper bounded by max_num_evals
+
+        :param model: a trained pytorch model
+        :param x: the sample to be attacked
+        :param x_target: specify a sample of another class, can be None for non-targeted attack
+        :param tol: the threshold for stopping the binary search
+        :param gamma: the scalar for the number of evaluations
+        :param vmin, vmax: the feasible range of inputs, typically within 0 and 1 for images
+        :param T: maximum iterations to find tangent point + projection
+        :param init_num_eval: the starting number of evaluations, scales 
+        :param max_num_evals: give an bound number of proposals
         """
         super().__init__()
         self.model = model
@@ -94,9 +126,7 @@ class TangentAttack(Attacker):
             while True:
                 random_noise = torch.zeros_like(self.x).uniform_(self.vmin, self.vmax)
                 random_noise_pred = self.model(random_noise).argmax(dim=-1).item()
-                if random_noise_pred != self.y: 
-                    # assign adversarial target label
-                    self.y_target = random_noise_pred
+                if random_noise_pred != self.y:
                     break
             
             # project random noise to decisin boundary using binary search 
@@ -116,18 +146,19 @@ class TangentAttack(Attacker):
         :return normal directions pointing to the adversarial region
         """
         # l2-norm perturbation
-        rand_perturbation = torch.randn(*[num_evals, *x_bound.shape]) * delta
+        rand_perturbation = torch.randn(*[num_evals, *x_bound.shape[1:]]) * delta
         perturbed = x_bound + rand_perturbation
-        perturbed_prediction = self.model(perturbed).argmax(dim=-1)
-        label_changed = (perturbed_prediction == self.y).float()
+        perturbed_prediction = self.model(perturbed).argmax(dim=-1, keepdim=True)
+        label_changed = (perturbed_prediction != self.y).float()
 
         # get normal direction
-        if label_changed.mean() == 0: # all labels changed
-            normal_direction = perturbed.mean(dim=0)
-        elif label_changed.mean() == 1: # all labels unchanged
-            normal_direction = -perturbed.mean(dim=0)
+        if label_changed.mean() == 0: # all labels unchanged
+            normal_direction = -perturbed.mean(dim=0, keepdim=True)
+        elif label_changed.mean() == 1: # all labels changed
+            normal_direction = perturbed.mean(dim=0, keepdim=True)
         else:
-            normal_direction = ((label_changed - label_changed.mean()) * perturbed).mean(dim=0)
+            # weighted sum
+            normal_direction = (2 * (label_changed - label_changed.mean()) * perturbed).mean(dim=0, keepdim=True)
         
         # normalize
         normal_vec = normal_direction / torch.linalg.norm(normal_direction.flatten(start_dim=1), dim=-1)
@@ -136,11 +167,18 @@ class TangentAttack(Attacker):
     def get_tangent_point(self, x: torch.Tensor, ball_center: torch.Tensor, radius: float, normal_vec: torch.Tensor) -> torch.Tensor:
         """
         a closed-form solution to the tangent point from ball_center to the query sample, measured in l2-norm
+
+        :param x: original data sample
+        :param ball_center: the current iterate at the adversarial boundary
+        :param radius: the radius of the hemisphere
+        :param normal_vec: the normal vector pointing into the adversarial direction
+        :return the tangent point
         """
+        # * all vectors below are row vectors
         # prepare
         ox = x - ball_center
-        sin_alpha = - torch.dot(ox, normal_vec) / (torch.norm(ox, p=2) * torch.norm(normal_vec, p=2))
-        cos_alpha = torch.sqrt(1- torch.square(sin_alpha()))
+        sin_alpha = (- ox @ normal_vec.T / (torch.norm(ox, p=2) * torch.norm(normal_vec, p=2))).flatten()
+        cos_alpha = torch.sqrt(1- torch.square(sin_alpha))
         cos_beta = radius / torch.norm(ox, p=2)
         sin_beta = torch.sqrt(1 - torch.square(cos_beta))
         sin_gamma = sin_beta * cos_alpha - cos_beta * sin_alpha
@@ -148,10 +186,11 @@ class TangentAttack(Attacker):
         k_height = radius * sin_gamma
 
         # get tangent point
-        numerator = ox - torch.dot(ox, normal_vec) * normal_vec / torch.norm(normal_vec) ** 2
+        numerator = ox - (ox @ normal_vec.T).flatten() * normal_vec / torch.norm(normal_vec) ** 2
         ok_prime = (numerator / torch.norm(numerator, p=2)) * radius * cos_gamma
         ok = ok_prime + k_height * normal_vec / torch.norm(normal_vec)
         
+        # ? perturbed vectors are all dense ?!
         result = ok + ball_center
         return result
 
@@ -179,16 +218,16 @@ class TangentAttack(Attacker):
         while True:
             # get a tangent point candidate
             tangent_point = self.get_tangent_point(x, x_bound, radius, normal_vec)
+            
+            # ! ensure valid range: this is currently different from the official implementation
+            tangent_point = tangent_point.clamp(min=self.vmin, max=self.vmax)
 
             # verify if it belongs to an adversarial class
-            tagent_point_pred = self.model(tangent_point).argmax(dim=-1).item()
-            if tagent_point_pred == target_label:
+            if self.check_attack_success(tangent_point, self.y, self.y_target):
                 break
             else:
                 radius /= 2
         
-        # ensure valid range
-        tangent_point = tangent_point.clamp(min=self.vmin, max=self.vmax)
         return tangent_point
 
     def _select_delta(self, i: int, dist: float) -> float: 
@@ -225,11 +264,12 @@ class TangentAttack(Attacker):
 
             # binary search back to the boundary
             cur = self.binary_search(tangent_point, self.tol)
+
+            # print(self.model(cur).argmax(dim=-1).item(), self.y)
         
             # evaluate current distance
             cur_dist = (cur - self.x).norm(p=2).item()
             logging.info(f"Iteration {i}: distance = {cur_dist:.6f}")
+            # print(cur_dist)
 
         return cur
-
-# TODO: 1. verify dimension along the way; 2. write documentations; 3. GPU memory profiling
