@@ -146,7 +146,7 @@ class TangentAttack(Attacker):
         :return normal directions pointing to the adversarial region
         """
         # l2-norm perturbation
-        rand_perturbation = torch.randn(*[num_evals, *x_bound.shape[1:]]) * delta
+        rand_perturbation = torch.randn(*[num_evals, *x_bound.shape[1:]], device=x_bound.device) * delta
         perturbed = x_bound + rand_perturbation
         perturbed_prediction = self.model(perturbed).argmax(dim=-1, keepdim=True)
         label_changed = (perturbed_prediction != self.y).float()
