@@ -116,13 +116,13 @@ class TangentAttack(Attacker):
         self.max_num_evals = max_num_evals
 
 
-    def initialize(self, x: torch.Tensor, x_target: torch.Tensor) -> torch.Tensor: 
+    def initialize(self) -> torch.Tensor: 
         """
         initialize x0 to start tangent attack: uniformly choose images from within feasible range, 
         and then binary search as a starting point
         """
         # non targeted attack
-        if x_target is None: 
+        if self.x_target is None: 
             while True:
                 random_noise = torch.zeros_like(self.x).uniform_(self.vmin, self.vmax)
                 random_noise_pred = self.model(random_noise).argmax(dim=-1).item()
@@ -132,7 +132,7 @@ class TangentAttack(Attacker):
             # project random noise to decisin boundary using binary search 
             x0 = self.binary_search(random_noise, self.tol)
         else:
-            x0 = self.binary_search(x_target, self.tol)
+            x0 = self.binary_search(self.x_target, self.tol)
         
         return x0
 
@@ -240,14 +240,10 @@ class TangentAttack(Attacker):
         else: return dist * self.gamma / self.dim
 
 
-    def attack(self, x_target: torch.Tensor) -> torch.Tensor:
-        """
-        launch adversarial attack against a specific input
-
-        :param x: the origin to perturbe
-        """
+    def attack(self) -> torch.Tensor:
+        """launch adversarial attack against a specific input"""
         # initialize
-        cur = self.initialize(self.x, x_target)
+        cur = self.initialize()
         cur_dist = (cur - self.x).norm(p=2)
         for i in range(1, self.T + 1):
             # get delta 
@@ -264,12 +260,9 @@ class TangentAttack(Attacker):
 
             # binary search back to the boundary
             cur = self.binary_search(tangent_point, self.tol)
-
-            # print(self.model(cur).argmax(dim=-1).item(), self.y)
         
             # evaluate current distance
             cur_dist = (cur - self.x).norm(p=2).item()
             logging.info(f"Iteration {i}: distance = {cur_dist:.6f}")
-            # print(cur_dist)
 
         return cur

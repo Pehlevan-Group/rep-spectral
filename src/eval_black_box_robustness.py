@@ -5,7 +5,7 @@ Evaluate Black-Box Robustness
 # load packages
 import os
 import argparse
-from typing import List
+from typing import List, Tuple
 from tqdm import tqdm
 import numpy as np
 import pandas as pd 
@@ -118,39 +118,56 @@ Attacker = get_attacker()
 
 # get samples
 @torch.no_grad()
-def get_samples():
+def get_samples() -> Tuple[torch.Tensor]:
     """
     filter on test sample with correct predictions
-    # TODO: what about training samples? 
-    # TODO: targeted attack filtering
+
+    :return correctly predicted samples, along with None/target samples
     """
-    correct_samples = torch.tensor([])
+    correct_samples, target_samples = torch.tensor([]), torch.tensor([])
     for X, y in test_loader:
         X, y = X.to(device), y.to(device)
         y_pred = model(X).argmax(dim=-1)
 
-        # collect correct samples in CPU
-        correct_samples = torch.cat([correct_samples, X[y_pred.eq(y)].to('cpu')])
+        if args.target is not None:
+            # collect adversarial target samples (using the true label, and equals the prediction)
+            target_samples = torch.cat([target_samples, X[(y == args.target) & (y_pred.eq(y))].to('cpu')])
+            # collect correct samples and samples that do not belong to the adversarial class 
+            correct_samples = torch.cat([correct_samples, X[(y != args.target) & (y_pred.eq(y))].to('cpu')])
+        else:
+            correct_samples = torch.cat([correct_samples, X[y_pred.eq(y)].to('cpu')])
+            if len(correct_samples) >= args.eval_sample_size: break
 
-        if len(correct_samples) >= args.eval_sample_size: break
-    
+    # keep first eval_sample_size many samples    
     correct_samples = correct_samples[:args.eval_sample_size]
-    return correct_samples
+    if len(target_samples) == 0: target_samples = None # for untargeted attack, chenge to None
+    return correct_samples, target_samples
 
 @torch.no_grad()
-def attack_all(samples: torch.Tensor):
+def attack_all(samples: torch.Tensor, target_samples: torch.Tensor) -> List[float]:
     """
     perform adversarial attck on correctly predicted samples
-    # TODO: add targeted attack
+    - targeted: pick a random sample of the target class as our intial guess
+    - untargeted: pass None and randomized target
 
     :param samples: batched samples
+    :param target_samples: batch samples of target class
+    :param return l2 adversarial distance
     """
     dists = []
     for sample in tqdm(samples):
         # keep first dimension the batch dimension
         sample = sample.unsqueeze(dim=0).to(device)
-        attacker = Attacker(model, sample, None, args.tol, vmin=0, vmax=1, T=args.T)
-        perturbed_sample = attacker.attack(None)
+        
+        # targeted: draw a random one 
+        if target_samples is not None:
+            target_sample = target_samples[torch.randperm(len(target_samples))[[1]]]
+        # untargeted
+        else:
+            target_sample = None
+            
+        attacker = Attacker(model, sample, target_sample, args.tol, vmin=0, vmax=1, T=args.T)
+        perturbed_sample = attacker.attack()
 
         # get distance
         dists.append((perturbed_sample - sample).norm(p=2).item())
@@ -167,8 +184,8 @@ def record(dists: List[float]):
 
 @torch.no_grad()
 def main():
-    samples = get_samples()
-    dists = attack_all(samples)
+    samples, target_samples = get_samples()
+    dists = attack_all(samples, target_samples)
     record(dists)
 
 if __name__ == '__main__':
