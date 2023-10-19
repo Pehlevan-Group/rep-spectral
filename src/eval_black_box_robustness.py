@@ -162,6 +162,7 @@ def attack_all(samples: torch.Tensor, target_samples: torch.Tensor) -> List[floa
         # targeted: draw a random one 
         if target_samples is not None:
             target_sample = target_samples[torch.randperm(len(target_samples))[[1]]]
+            target_sample = target_sample.to(device)
         # untargeted
         else:
             target_sample = None
