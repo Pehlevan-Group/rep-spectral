@@ -209,7 +209,7 @@ def top_eig_regularizer_autograd(x: torch.Tensor, feature_map: nn.Module, sample
         width = J.shape[0]
         met = J.permute(1, 2, 0) @ J.permute(1, 0, 2) / width # manual normalization
         # eigs, _ = torch.lobpcg(met, k=1, largest=True)
-        eigs = torch.linalg.eigvalsh(met)[:, :1] # * more numerically stable than lobpcg
+        eigs = torch.linalg.eigvalsh(met)[:, -1:] # * more numerically stable than lobpcg
         eig_list.append(eigs)
 
     reg_terms = torch.concat(eig_list)
