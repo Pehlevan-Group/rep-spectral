@@ -18,7 +18,13 @@ from torch.optim import SGD, Adam
 from torch.utils.tensorboard import SummaryWriter
 
 # load file
-from model import SLP, weights_init, cross_lipschitz_regulerizer, volume_element_regularizer_autograd, top_eig_regularizer_autograd
+from model import (
+    SLP, weights_init, 
+    cross_lipschitz_regulerizer, 
+    volume_element_regularizer_autograd, 
+    top_eig_regularizer_autograd,
+    top_eig_ub_regularizer_autograd
+)
 from utils import load_config
 
 # arguments
@@ -143,7 +149,11 @@ def train():
                         X_train, model.feature_map, 
                         sample_size=args.sample_size, scanbatchsize=args.scanbatchsize
                     )
-        
+                elif args.reg == 'eig-ub':
+                    reg_loss = top_eig_ub_regularizer_autograd(
+                        X_train, model
+                    )
+
             # step
             train_loss += reg_loss * args.lam
             train_loss.backward()

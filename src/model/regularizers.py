@@ -213,6 +213,28 @@ def top_eig_regularizer_autograd(x: torch.Tensor, feature_map: nn.Module, sample
         eig_list.append(eigs)
 
     reg_terms = torch.concat(eig_list)
-    reg_term = reg_terms.sum()
+    reg_term = reg_terms.mean() # * use average
+    
+    return reg_term
+
+def top_eig_ub_regularizer_autograd(x: torch.Tensor, model: nn.Module):
+    """
+    give upper bound of the previous quantity
+    # TODO: extend to deep layers
+    """
+
+    # * single-hidden-layer implementation only
+    # * for sigmoid only
+    
+    # activation part
+    z = model.nl(model.lin1(x))
+    z_der_sq = (z * (1 - z)).square() # * sigmoid
+    mult = z_der_sq.max(dim=-1).values.mean()
+
+    # eigenspetrum part
+    W1 = model.lin1.weight
+    top_eig = torch.linalg.eigvalsh(W1.T @ W1).max()
+    
+    reg_term = mult * top_eig
     
     return reg_term
