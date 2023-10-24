@@ -23,7 +23,8 @@ from model import (
     cross_lipschitz_regulerizer, 
     volume_element_regularizer_autograd, 
     top_eig_regularizer_autograd,
-    top_eig_ub_regularizer_autograd
+    top_eig_ub_regularizer_autograd,
+    spectral_ub_regularizer_autograd
 )
 from utils import load_config
 
@@ -151,6 +152,10 @@ def train():
                     )
                 elif args.reg == 'eig-ub':
                     reg_loss = top_eig_ub_regularizer_autograd(
+                        X_train, model
+                    )
+                elif args.reg == 'spectral':
+                    reg_loss = spectral_ub_regularizer_autograd(
                         X_train, model
                     )
 

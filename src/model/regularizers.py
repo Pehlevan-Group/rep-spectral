@@ -238,3 +238,29 @@ def top_eig_ub_regularizer_autograd(x: torch.Tensor, model: nn.Module):
     reg_term = mult * top_eig
     
     return reg_term
+
+def spectral_ub_regularizer_autograd(x: torch.Tensor, model: nn.Module):
+    """
+    give spectral bound on also the last layer
+    idea from https://arxiv.org/pdf/1705.10941.pdf
+    (served as benchmark of our noval method)
+    # TODO: extend to deep layers
+    """
+
+    # * single-hidden-layer implementation only
+    # * for sigmoid only
+
+    # activation part
+    z = model.nl(model.lin1(x))
+    z_der_sq = (z * (1 - z)).square() # * sigmoid
+    mult = z_der_sq.max(dim=-1).values.mean()
+
+    # eigenspetrum part
+    W1 = model.lin1.weight
+    W2 = model.lin2.weight
+    top_eig1 = torch.linalg.eigvalsh(W1.T @ W1).max()
+    top_eig2 = torch.linalg.eigvalsh(W2.T @ W2).max()
+    
+    reg_term = mult * top_eig1 * top_eig2 # * mult vs log add ?
+    
+    return reg_term
