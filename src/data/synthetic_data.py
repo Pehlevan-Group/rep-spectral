@@ -97,3 +97,18 @@ def load_sin_boundary(step: int=20, test_size: float=0.5, seed: int=400) -> Tupl
     train_idx, test_idx = train_test_index(len(y), test_size=test_size, seed=seed)
     X_train, X_test, y_train, y_test = X[train_idx], X[test_idx], y[train_idx], y[test_idx]
     return X_train, X_test, y_train, y_test
+
+def load_sin_random(step: int=20, test_size: float=0.5, seed: int=400) -> Tuple[torch.Tensor]:
+    """
+    a uniform sampling (i.e. not uniform stepsize sampling) from a sinusoidal boundary in 2D unit square
+    """
+    # set randomness
+    torch.manual_seed(seed)
+
+    X = torch.zeros((step ** 2, 2)).uniform_(-1, 1)
+    y = (X[:, 1] > 0.6 * np.sin(7 * X[:, 0] - 1)).to(torch.float32)
+
+    # train test split
+    train_idx, test_idx = train_test_index(len(y), test_size=test_size, seed=seed)
+    X_train, X_test, y_train, y_test = X[train_idx], X[test_idx], y[train_idx], y[test_idx]
+    return X_train, X_test, y_train, y_test

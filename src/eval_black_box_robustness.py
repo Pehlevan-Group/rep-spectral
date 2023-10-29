@@ -15,8 +15,8 @@ import torch.nn as nn
 from torch.utils.data import DataLoader
 
 # load files
-from model import SLP
-from utils import load_config
+from model import SLP, MLP
+from utils import load_config, get_logging_name
 
 # ======== legacy arguments =======
 # arguments
@@ -27,7 +27,7 @@ parser.add_argument("--step", default=20, type=int, help='the number of steps')
 parser.add_argument("--test-size", default=0.5, type=float, help='the proportion of dataset for testing')
 
 # model
-parser.add_argument('--hidden-dim', default=20, type=int, help='the number of hidden units')
+parser.add_argument('--hidden-dim', default=[20], type=int, help='the number of hidden units', nargs='+')
 
 # training
 parser.add_argument('--batch-size', default=1024, type=int, help='the batchsize for training')
@@ -68,13 +68,17 @@ torch.manual_seed(args.seed)
 paths = load_config(args.tag)
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
+# modify hidden dims
+if isinstance(args.hidden_dim, list) and len(args.hidden_dim) == 1: args.hidden_dim = args.hidden_dim[0]
+
+
 # set up summary writer
-log_name = f'{args.data}_step{args.step}_ts{args.test_size}_w{args.hidden_dim}_bs{args.batch_size}' + \
-           f'_lr{args.lr}_wd{args.wd}_nl{args.nl}_lam{args.lam}_reg{args.reg}' + (f'_m{args.m}' if args.reg == 'vol' else '') + \
-           f'_ss{args.sample_size}_e{args.epochs}_b{args.burnin}_seed{args.seed}_rf{args.reg_freq}'
-base_log_name = f'{args.data}_step{args.step}_ts{args.test_size}_w{args.hidden_dim}_bs{args.batch_size}' + \
-           f'_lr{args.lr}_wd{args.wd}_nl{args.nl}_lam1_regNone' + \
-           f'_ssNone_e{args.epochs}_b600_seed{args.seed}'
+if 'mnist' in args.data: 
+    log_name, base_log_name = get_logging_name(args, 'linear_large')
+    input_dim, output_dim = 784, 10
+else:
+    log_name, base_log_name = get_logging_name(args, 'linear_small')
+    input_dim, output_dim = 2, 1
 model_path = os.makedirs(os.path.join(paths['model_dir'], log_name), exist_ok=True)
 
 # load data
@@ -98,7 +102,10 @@ print(f'{args.data} data loaded')
 
 # get model
 nl = getattr(nn, args.nl)()
-model = SLP(input_dim=784, width=args.hidden_dim, output_dim=10, nl=nl).to(device)
+if isinstance(args.hidden_dim, list):
+    model = MLP([input_dim, *args.hidden_dim, output_dim], nl=nl).to(device)
+else:
+    model = SLP(input_dim=input_dim, width=args.hidden_dim, output_dim=output_dim, nl=nl).to(device)
 model.load_state_dict(
     torch.load(
         os.path.join(paths['model_dir'], base_log_name if args.reg == "None" else log_name, f'model_e{args.eval_epoch}.pt'

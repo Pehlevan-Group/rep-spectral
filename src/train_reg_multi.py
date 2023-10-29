@@ -26,7 +26,7 @@ from model import (
     top_eig_ub_regularizer_autograd,
     spectral_ub_regularizer_autograd
 )
-from utils import load_config
+from utils import load_config, get_logging_name
 
 # arguments
 parser = argparse.ArgumentParser()
@@ -36,7 +36,7 @@ parser.add_argument("--step", default=20, type=int, help='the number of steps')
 parser.add_argument("--test-size", default=0.5, type=float, help='the proportion of dataset for testing')
 
 # model
-parser.add_argument('--hidden-dim', default=20, type=int, help='the number of hidden units')
+parser.add_argument('--hidden-dim', default=[20], type=int, help='the number of hidden units', nargs='+')
 
 # training
 parser.add_argument('--batch-size', default=1024, type=int, help='the batchsize for training')
@@ -44,7 +44,7 @@ parser.add_argument('--lr', default=0.1, type=float, help='learning rate')
 parser.add_argument("--nl", default='Sigmoid', type=str, help='the nonlinearity of first layer')
 parser.add_argument("--wd", default=0, type=float, help='weight decay')
 parser.add_argument('--lam', default=1, type=float, help='the multiplier / strength of regularization')
-parser.add_argument('--reg', default=None, type=str, help='the type of regularization')
+parser.add_argument('--reg', default='None', type=str, help='the type of regularization')
 parser.add_argument('--sample-size', default=None, type=float, 
     help='the proportion of top samples for regularization (regularize samples with top eigenvalues or vol element)')
 parser.add_argument("--m", default=None, type=int, help='vol element specific: keep the top m singular values to regularize only')
@@ -68,13 +68,11 @@ torch.manual_seed(args.seed)
 paths = load_config(args.tag)
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
+# modify widths
+if isinstance(args.hidden_dim, list) and len(args.hidden_dim) == 1: args.hidden_dim = args.hidden_dim[0]
+
 # set up summary writer
-log_name = f'{args.data}_step{args.step}_ts{args.test_size}_w{args.hidden_dim}_bs{args.batch_size}' + \
-           f'_lr{args.lr}_wd{args.wd}_nl{args.nl}_lam{args.lam}_reg{args.reg}' + (f'_m{args.m}' if args.reg == 'vol' else '') + \
-           f'_ss{args.sample_size}_e{args.epochs}_b{args.burnin}_seed{args.seed}_rf{args.reg_freq}'
-base_log_name = f'{args.data}_step{args.step}_ts{args.test_size}_w{args.hidden_dim}_bs{args.batch_size}' + \
-           f'_lr{args.lr}_wd{args.wd}_nl{args.nl}_lam1_regNone' + \
-           f'_ssNone_e{args.epochs}_b600_seed{args.seed}'
+log_name, base_log_name = get_logging_name(args, 'linear_large')
 model_path = os.makedirs(os.path.join(paths['model_dir'], log_name), exist_ok=True)
 writer = SummaryWriter(os.path.join(paths['result_dir'], log_name))
 
@@ -111,7 +109,7 @@ def train():
     loss_fn = nn.CrossEntropyLoss()
     
     # initialize 
-    if args.reg is None:
+    if args.reg == 'None':
         pbar = tqdm(range(args.epochs + 1)) 
     else:
         # start training from burnin 
@@ -152,11 +150,11 @@ def train():
                     )
                 elif args.reg == 'eig-ub':
                     reg_loss = top_eig_ub_regularizer_autograd(
-                        X_train, model
+                        X_train, model.feature_map
                     )
                 elif args.reg == 'spectral':
                     reg_loss = spectral_ub_regularizer_autograd(
-                        X_train, model
+                        model
                     )
 
             # step
