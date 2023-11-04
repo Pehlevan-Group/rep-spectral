@@ -42,6 +42,8 @@ parser.add_argument("--m", default=None, type=int, help='vol element specific: k
 parser.add_argument("--epochs", default=1200, type=int, help='the number of epochs for training')
 parser.add_argument('--burnin', default=600, type=int, help='the period before which no regularization is imposed')
 parser.add_argument('--reg-freq', default=5, type=int, help='the freqency of imposing regularizations')
+parser.add_argument('--max-layer', default=None, type=int, 
+    help='the number of max layers to pull information from. None means the entire feature map')
 
 # logging
 parser.add_argument('--log-epoch', default=100, type=int, help='logging frequency')
