@@ -91,6 +91,10 @@ def load_data():
     elif args.data == 'fashion_mnist':
         from data import fashion_mnist
         train_set, test_set = fashion_mnist(paths['data_dir'], flatten=True)
+    elif args.data == 'sin-random':
+        from data import load_sin_random, CustomDataset
+        X_train, X_test, y_train, y_test = load_sin_random(args.step, args.test_size, args.seed)
+        train_set, test_set = CustomDataset(X_train, y_train), CustomDataset(X_test, y_test)
     else:
         raise NotImplementedError(f'{args.data} not available')
     return train_set, test_set

@@ -9,6 +9,7 @@ import json
 
 import numpy as np
 import torch
+from torch.utils.data import Dataset
 
 def load_vol_inputs(file_path: str):
     """load vol inputs"""
@@ -112,3 +113,17 @@ def load_sin_random(step: int=20, test_size: float=0.5, seed: int=400) -> Tuple[
     train_idx, test_idx = train_test_index(len(y), test_size=test_size, seed=seed)
     X_train, X_test, y_train, y_test = X[train_idx], X[test_idx], y[train_idx], y[test_idx]
     return X_train, X_test, y_train, y_test
+
+# =========== torch dataset wrapper ===========
+class CustomDataset(Dataset):
+    """wrap x and y to a torch dataset"""
+    def __init__(self, X: torch.Tensor, y: torch.Tensor):
+        super().__init__()
+        self.x = X 
+        self.y = y
+    
+    def __len__(self) -> int: 
+        return len(self.y)
+    
+    def __getitem__(self, idx) -> Tuple[torch.Tensor]:
+        return self.x[idx], self.y[idx]
