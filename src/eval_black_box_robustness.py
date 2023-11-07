@@ -61,6 +61,8 @@ parser.add_argument('--eval-sample-size', default=2000, type=int, help='the numb
 parser.add_argument('--attacker', default='TangentAttack', type=str, help='the type of attack')
 parser.add_argument('--T', default=40, type=int, help='max iterations for attack')
 parser.add_argument('--tol', default=1e-5, type=float, help='the threshold to stop binary search')
+parser.add_argument('--vmin', default=0, type=float, help='the min value of the adversarial guess range')
+parser.add_argument('--vmax', default=1, type=float, help='the max value of the adversarial guess range')
 
 args = parser.parse_args()
 
@@ -180,7 +182,7 @@ def attack_all(samples: torch.Tensor, target_samples: torch.Tensor) -> List[floa
         else:
             target_sample = None
             
-        attacker = Attacker(model, sample, target_sample, args.tol, vmin=0, vmax=1, T=args.T)
+        attacker = Attacker(model, sample, target_sample, args.tol, vmin=args.vmin, vmax=args.vmax, T=args.T)
         perturbed_sample = attacker.attack()
 
         # get distance

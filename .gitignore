@@ -182,3 +182,6 @@ config.toml
 
 commands/*
 out/*
+
+# tests
+test_*
