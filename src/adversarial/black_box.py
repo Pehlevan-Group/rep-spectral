@@ -133,18 +133,26 @@ class TangentAttack(Attacker):
         self.max_num_evals = max_num_evals
 
 
-    def initialize(self) -> torch.Tensor: 
+    def initialize(self, max_search_times: int=5000) -> torch.Tensor: 
         """
         initialize x0 to start tangent attack: uniformly choose images from within feasible range, 
         and then binary search as a starting point
+
+        :param max_search_times: put a maximum number of init
         """
         # non targeted attack
         if self.x_target is None: 
-            while True:
+            count = 0
+            while count < max_search_times:
                 random_noise = torch.zeros_like(self.x).uniform_(self.vmin, self.vmax)
                 random_noise_pred = self.get_decision(random_noise).item()
+                count += 1
                 if random_noise_pred != self.y:
                     break
+            
+            # stop search strategy: halt program
+            if random_noise_pred == self.y:
+                raise Exception("the model seem to have collapsed outputs ... stop search and exit")
             
             # project random noise to decisin boundary using binary search 
             x0 = self.binary_search(random_noise, self.tol)
