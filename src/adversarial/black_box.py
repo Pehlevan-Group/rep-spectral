@@ -29,7 +29,7 @@ class Attacker:
         :return True if the attack is sucessful
         """
         # check prediction
-        new_sample_pred = self.model(new_sample).argmax(dim=-1).item()
+        new_sample_pred = self.get_decision(new_sample).item()
         
         # untargeted
         if target_label is None:
@@ -58,6 +58,23 @@ class Attacker:
         
         result = (1 - r) * self.x + r * x_adv
         return result
+
+    def get_decision(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        compute y from model
+        note that binary model only has one output dim (use 0 as a boundary to give decision)
+        otherwise, use argmax
+
+        :param x: model input
+        :return decision for x
+        """
+        pred = self.model(x)
+        # binary
+        if pred.shape[1] == 1:
+            decisions = (pred >= 0).int()
+        else:
+            decisions = pred.argmax(dim=-1, keepdim=True)
+        return decisions
 
 
 class TangentAttack(Attacker):
@@ -98,11 +115,11 @@ class TangentAttack(Attacker):
         self.model = model
         self.x = x 
         self.dim = np.prod([*x.shape[1:]])
-        self.y = self.model(self.x).argmax(dim=-1).item() # predicted label
+        self.y = self.get_decision(self.x).item() # predicted label
 
         # adversarial labels
         self.x_target = x_target
-        self.y_target = None if x_target is None else self.model(x_target).argmax(dim=-1).item()
+        self.y_target = None if x_target is None else self.get_decision(x_target).item()
 
         # feasible range of input
         self.vmin = vmin 
@@ -116,18 +133,26 @@ class TangentAttack(Attacker):
         self.max_num_evals = max_num_evals
 
 
-    def initialize(self) -> torch.Tensor: 
+    def initialize(self, max_search_times: int=5000) -> torch.Tensor: 
         """
         initialize x0 to start tangent attack: uniformly choose images from within feasible range, 
         and then binary search as a starting point
+
+        :param max_search_times: put a maximum number of init
         """
         # non targeted attack
         if self.x_target is None: 
-            while True:
+            count = 0
+            while count < max_search_times:
                 random_noise = torch.zeros_like(self.x).uniform_(self.vmin, self.vmax)
-                random_noise_pred = self.model(random_noise).argmax(dim=-1).item()
+                random_noise_pred = self.get_decision(random_noise).item()
+                count += 1
                 if random_noise_pred != self.y:
                     break
+            
+            # stop search strategy: halt program
+            if random_noise_pred == self.y:
+                raise Exception("the model seem to have collapsed outputs ... stop search and exit")
             
             # project random noise to decisin boundary using binary search 
             x0 = self.binary_search(random_noise, self.tol)
@@ -148,7 +173,7 @@ class TangentAttack(Attacker):
         # l2-norm perturbation
         rand_perturbation = torch.randn(*[num_evals, *x_bound.shape[1:]], device=x_bound.device) * delta
         perturbed = x_bound + rand_perturbation
-        perturbed_prediction = self.model(perturbed).argmax(dim=-1, keepdim=True)
+        perturbed_prediction = self.get_decision(perturbed)
         label_changed = (perturbed_prediction != self.y).float()
 
         # get normal direction
@@ -178,9 +203,9 @@ class TangentAttack(Attacker):
         # prepare
         ox = x - ball_center
         sin_alpha = (- ox @ normal_vec.T / (torch.norm(ox, p=2) * torch.norm(normal_vec, p=2))).flatten()
-        cos_alpha = torch.sqrt(1- torch.square(sin_alpha))
+        cos_alpha = torch.sqrt((1 - torch.square(sin_alpha)).clamp(min=0)) # numerical fix
         cos_beta = radius / torch.norm(ox, p=2)
-        sin_beta = torch.sqrt(1 - torch.square(cos_beta))
+        sin_beta = torch.sqrt((1 - torch.square(cos_beta)).clamp(min=0))   # numerical fix
         sin_gamma = sin_beta * cos_alpha - cos_beta * sin_alpha
         cos_gamma = sin_beta * cos_alpha + cos_beta * sin_alpha
         k_height = radius * sin_gamma
@@ -198,7 +223,6 @@ class TangentAttack(Attacker):
             self, x: torch.Tensor, 
             x_bound: torch.Tensor, 
             normal_vec: torch.Tensor, 
-            target_label: int,
             cur_iter: int
         ) -> torch.Tensor:
         """
@@ -208,7 +232,6 @@ class TangentAttack(Attacker):
         :param x: current data sample
         :param x_bound: the adversarial sample
         :param normal_vec: the normal vector pointing to the adversarial region
-        :param target_label: the prediction of the adversarial region
         :param cur_iter: the current iteration, for normalizing the starting radius
         :return a valid tagent point
         """
@@ -256,7 +279,7 @@ class TangentAttack(Attacker):
             normal_vec = self.estimate_normal_direction(cur, num_evals, delta)
 
             # find valid tangent point
-            tangent_point = self.geometric_progression_for_tangent_point(self.x, cur, normal_vec, target_label=self.y_target, cur_iter=i)
+            tangent_point = self.geometric_progression_for_tangent_point(self.x, cur, normal_vec, cur_iter=i)
 
             # binary search back to the boundary
             cur = self.binary_search(tangent_point, self.tol)
