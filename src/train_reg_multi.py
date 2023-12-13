@@ -133,6 +133,7 @@ def train():
             total_train_loss += train_loss * len(X_train)
             total_train_acc += y_pred_logits.argmax(dim=-1).eq(y_train).sum()
             
+            # TODO: change this: only regularize once per epoch
             # regularization
             reg_loss = 0
             if i > args.burnin and i % args.reg_freq == 0:

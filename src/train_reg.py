@@ -10,9 +10,11 @@ import numpy as np
 import torch
 import torch.nn as nn
 from torch.optim import SGD
+from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 
 # load file
+from data import CustomDataset
 from model import (
     SLP, MLP, weights_init,
     init_model_right_singular,
@@ -31,6 +33,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument("--data", default='sin', type=str, help='data to perform training on')
 parser.add_argument("--step", default=20, type=int, help='the number of steps')
 parser.add_argument("--test-size", default=0.5, type=float, help='the proportion of dataset for testing')
+parser.add_argument('--batch-size', default=512, type=int, help='the training batch size')
 
 # model
 parser.add_argument('--hidden-dim', default=[20], type=int, help='the number of hidden units', nargs='+')
@@ -104,6 +107,10 @@ X_train, X_test, y_train, y_test = load_data()
 X_train, X_test, y_train, y_test = X_train.to(device), X_test.to(device), y_train.to(device), y_test.to(device)
 print(f'{args.data} data loaded')
 
+# convert to data loader
+train_dataset = CustomDataset(X_train, y_train)
+train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, drop_last=False)
+
 
 # get optimizer
 weights_init(model)
@@ -143,10 +150,16 @@ def train():
     
     model.train()
     for i in pbar:
-        opt.zero_grad()
-        y_pred_logits = sig(model(X_train)).flatten()
-        train_loss = loss_fn(y_pred_logits, y_train)
-        train_acc = ((y_pred_logits >= 0.5).to(int) == y_train).to(torch.float32).mean()
+        for batch_X_train, batch_y_train in train_loader:
+            opt.zero_grad()
+            y_pred_logits = sig(model(batch_X_train)).flatten()
+            train_loss = loss_fn(y_pred_logits, batch_y_train)
+            train_acc = ((y_pred_logits >= 0.5).to(int) == batch_y_train).to(torch.float32).mean()
+
+            # update 
+            train_loss.backward()
+            opt.step()
+
 
         if i % args.log_epoch == 0:
             # testing 
@@ -156,8 +169,8 @@ def train():
                 test_acc = ((y_test_pred_logits >= 0.5).to(int) == y_test).to(torch.float32).mean()
         
             # logging
-            writer.add_scalar('train/loss', train_loss, i)
-            writer.add_scalar('train/acc', train_acc, i)
+            writer.add_scalar('train/loss', train_loss, i)  # only the last batch 
+            writer.add_scalar('train/acc', train_acc, i)    # only the last batch
             writer.add_scalar('test/loss', test_loss, i)
             writer.add_scalar('test/acc', test_acc, i)
             writer.flush()
@@ -170,6 +183,7 @@ def train():
                 {'tr_loss': train_loss.item(), 'tr_acc': train_acc.item(), 'te_loss': test_loss.item(), 'te_acc': test_acc.item()})
 
         # regularization
+        reg_loss = None 
         if i > args.burnin:
             if args.reg == 'cross-lip':
                 reg_loss = cross_lipschitz_regulerizer(model, X_train, is_binary=True, sample_size=args.sample_size)
@@ -205,13 +219,13 @@ def train():
                     model,
                     iterative=args.iterative, v_init=v_init, tol=args.tol, max_update=args.max_update
                 )
-        else:
-            reg_loss = 0
         
-        # step
-        train_loss += reg_loss * args.lam
-        train_loss.backward()
-        opt.step()
+        # regularization
+        if reg_loss is not None:
+            reg_loss *= args.lam
+            opt.zero_grad()
+            reg_loss.backward()
+            opt.step()
 
         # save model
         if i % args.log_model == 0:
