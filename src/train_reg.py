@@ -15,6 +15,7 @@ from torch.utils.tensorboard import SummaryWriter
 # load file
 from model import (
     SLP, MLP, weights_init,
+    init_model_right_singular,
     cross_lipschitz_regulerizer, 
     volume_element_regularizer, 
     top_eig_regularizer,
@@ -44,6 +45,11 @@ parser.add_argument("--epochs", default=1200, type=int, help='the number of epoc
 parser.add_argument('--burnin', default=600, type=int, help='the period before which no regularization is imposed')
 parser.add_argument('--max-layer', default=None, type=int, 
     help='the number of max layers to pull information from. None means the entire feature map')
+
+# iterative singular 
+parser.add_argument('--iterative', action='store_true', default=False, help='True to turn on iterative method')
+parser.add_argument('--tol', default=1e-6, type=float, help='the tolerance for stopping the iterative method')
+parser.add_argument('--max-update', default=10, type=int, help='the maximum update iteration during training')
 
 # logging
 parser.add_argument('--log-epoch', default=100, type=int, help='logging frequency')
@@ -102,6 +108,20 @@ print(f'{args.data} data loaded')
 # get optimizer
 weights_init(model)
 opt = SGD(model.parameters(), lr=args.lr, weight_decay=args.wd, momentum=0.9)
+
+# init model singular values 
+if args.iterative:
+    if args.reg == 'spectral':
+        v_init = init_model_right_singular(model.model, tol=args.tol)
+    elif args.reg == 'eig-ub':
+        v_init = init_model_right_singular(
+            model.feature_map if hasattr(model, 'feature_map') else model.feature_maps[-1],
+            tol=args.tol
+        )
+    print("initialize top right singular direction")
+else:
+    v_init = {}
+    
 
 def train():
     """full batch training"""
@@ -177,10 +197,14 @@ def train():
             elif args.reg == 'eig-ub':
                 feature_map = model.feature_map if hasattr(model, 'feature_map') else model.feature_maps[-1]
                 reg_loss = top_eig_ub_regularizer_autograd(
-                    X_train, feature_map, max_layer=args.max_layer
+                    X_train, feature_map, max_layer=args.max_layer,
+                    iterative=args.iterative, v_init=v_init, tol=args.tol, max_update=args.max_update
                 )
             elif args.reg == 'spectral':
-                reg_loss = spectral_ub_regularizer_autograd(model)
+                reg_loss = spectral_ub_regularizer_autograd(
+                    model,
+                    iterative=args.iterative, v_init=v_init, tol=args.tol, max_update=args.max_update
+                )
         else:
             reg_loss = 0
         

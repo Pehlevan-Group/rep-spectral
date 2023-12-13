@@ -3,10 +3,11 @@ hosts a list of geometric-inspired regularizers (analytic)
 """
 
 # load packages
-import torch 
+import torch
 import torch.nn as nn
 
 # TODO: change nonlinearity dependence
+
 
 def determinant_analytic(x: torch.Tensor, W: torch.Tensor, b: torch.Tensor):
     """
@@ -20,7 +21,7 @@ def determinant_analytic(x: torch.Tensor, W: torch.Tensor, b: torch.Tensor):
     n = W.shape[0]
     # preactivation
     z = x @ W.T + b  # number of scans by n
-    nl = nn.Sigmoid() # * fix sigmoid for now
+    nl = nn.Sigmoid()  # * fix sigmoid for now
     activated_z = nl(z) * (1 - nl(z))
     activated_square = activated_z.square()
 
@@ -36,7 +37,10 @@ def determinant_analytic(x: torch.Tensor, W: torch.Tensor, b: torch.Tensor):
     # results = torch.sqrt(results) # * for dimensional analysis, keep squared
     return results
 
-def volume_element_regularizer(model: nn.Module, X: torch.Tensor, sample_size: float=None) -> float:
+
+def volume_element_regularizer(
+    model: nn.Module, X: torch.Tensor, sample_size: float = None
+) -> float:
     """
     sum of geometric quantities (with top ones selected)
     """
@@ -45,16 +49,19 @@ def volume_element_regularizer(model: nn.Module, X: torch.Tensor, sample_size: f
     if sample_size is None:
         reg_term = reg_terms.sum()
     else:
-        reg_terms, _ = torch.topk(reg_terms, int(sample_size * len(reg_terms)), dim=0, sorted=False)
+        reg_terms, _ = torch.topk(
+            reg_terms, int(sample_size * len(reg_terms)), dim=0, sorted=False
+        )
         reg_term = reg_terms.sum()
-        
+
     return reg_term
+
 
 # ========= reg 3: top eig =================
 def top_eig_analytic(x: torch.Tensor, W: torch.Tensor, b: torch.Tensor):
     """
-    it can be shown that a small top eigenvalue for a correct sample 
-    is a necessary condition for good input space perturbation 
+    it can be shown that a small top eigenvalue for a correct sample
+    is a necessary condition for good input space perturbation
 
     :param x: input tensor (d=2)
     :param W: weight matrix n by d
@@ -65,9 +72,9 @@ def top_eig_analytic(x: torch.Tensor, W: torch.Tensor, b: torch.Tensor):
 
     # compute three components
     z = x @ W.T + b  # number of scans by n
-    nl = nn.Sigmoid() # * fix sigmoid for now
+    nl = nn.Sigmoid()  # * fix sigmoid for now
     activated_z = nl(z) * (1 - nl(z))
-    
+
     g11 = activated_z @ W[:, [0]].square() / n
     g22 = activated_z @ W[:, [1]].square() / n
     g12 = activated_z @ W.prod(dim=1, keepdim=True) / n
@@ -76,7 +83,10 @@ def top_eig_analytic(x: torch.Tensor, W: torch.Tensor, b: torch.Tensor):
     lambda_max = (g11 + g22 + torch.sqrt((g11 - g22).square() + 4 * g12.square())) / 2
     return lambda_max
 
-def top_eig_regularizer(model: nn.Module, X: torch.Tensor, sample_size: float=None) -> float:
+
+def top_eig_regularizer(
+    model: nn.Module, X: torch.Tensor, sample_size: float = None
+) -> float:
     """
     sum of top eigvalues
 
@@ -87,7 +97,9 @@ def top_eig_regularizer(model: nn.Module, X: torch.Tensor, sample_size: float=No
     if sample_size is None:
         reg_term = reg_terms.sum()
     else:
-        reg_terms, _ = torch.topk(reg_terms, int(sample_size * len(reg_terms)), dim=0, sorted=False)
+        reg_terms, _ = torch.topk(
+            reg_terms, int(sample_size * len(reg_terms)), dim=0, sorted=False
+        )
         reg_term = reg_terms.sum()
 
     return reg_term
