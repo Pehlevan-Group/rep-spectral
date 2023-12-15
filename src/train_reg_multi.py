@@ -9,6 +9,7 @@ and then read the model at some timestamp to train with regularizers
 # load packages
 import os 
 import argparse
+import warnings
 from tqdm import tqdm
 import numpy as np
 import torch
@@ -138,10 +139,13 @@ def train():
         pbar = tqdm(range(args.burnin, args.epochs + 1))
         
         # load model
-        model.load_state_dict(
-            torch.load(os.path.join(paths['model_dir'], base_log_name, f'model_e{args.burnin}.pt'),
-            map_location=device),
-        )
+        try: 
+            model.load_state_dict(
+                torch.load(os.path.join(paths['model_dir'], base_log_name, f'model_e{args.burnin}.pt'),
+                map_location=device),
+            )
+        except:
+            warnings.warn('Not using base model, retraining ...')
 
     for i in pbar:
         model.train()
