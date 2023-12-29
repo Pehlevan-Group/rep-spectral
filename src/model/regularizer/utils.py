@@ -39,6 +39,10 @@ def derivatives(x: torch.Tensor, nl_type: str) -> torch.Tensor:
         return _derivative_sigmoid(x)
     elif nl_type.lower() == "gelu":
         return _derivative_gelu(x)
+    elif nl_type.lower() == "relu":
+        return _derivative_relu(x)
+    elif nl_type.lower() == 'elu':
+        return _derivative_elu(x)
     else:
         raise NotImplementedError(f"nl type {nl_type} not available")
 
@@ -55,6 +59,17 @@ def _derivative_gelu(x: torch.Tensor):
     der = (1 + torch.erf(x / 2 ** (1 / 2))) / 2 + x * 1 / (2 * torch.pi) ** (
         1 / 2
     ) * torch.exp(-(x**2) / 2)
+    return der
+
+def _derivative_relu(x: torch.Tensor):
+    """derivative of ReLU"""
+    der = torch.maximum(x, torch.tensor(0, device=x.device)) / x.clamp(min=1e-16)
+    return der
+
+def _derivative_elu(x: torch.Tensor):
+    """derivative of ELU"""
+    ind = (x > 0).to(torch.int64)
+    der = x / x * ind + torch.exp(x) * (1 - ind)
     return der
 
 
