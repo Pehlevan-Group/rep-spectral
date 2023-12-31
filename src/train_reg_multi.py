@@ -4,6 +4,8 @@ Here we will use dataloader for batch training
 
 to reduce runtime, we first train the model without a regularization,
 and then read the model at some timestamp to train with regularizers
+
+regularization is done after each minibatch update
 """
 
 # load packages
@@ -15,7 +17,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
-from torch.optim import SGD, Adam
+import torch.optim  as optim
 from torch.utils.tensorboard import SummaryWriter
 
 # load file
@@ -44,7 +46,9 @@ parser.add_argument('--hidden-dim', default=[20], type=int, help='the number of 
 parser.add_argument('--batch-size', default=1024, type=int, help='the batchsize for training')
 parser.add_argument('--lr', default=0.1, type=float, help='learning rate')
 parser.add_argument("--nl", default='Sigmoid', type=str, help='the nonlinearity of first layer')
+parser.add_argument("--opt", default='SGD', type=str, help='the type of optimizer')
 parser.add_argument("--wd", default=0, type=float, help='weight decay')
+parser.add_argument('--mom', default=0.9, type=float, help='the momentum')
 parser.add_argument('--lam', default=1, type=float, help='the multiplier / strength of regularization')
 parser.add_argument('--reg', default='None', type=str, help='the type of regularization')
 parser.add_argument('--sample-size', default=None, type=float, 
@@ -111,21 +115,8 @@ model = SLP(input_dim=784, width=args.hidden_dim, output_dim=10, nl=nl).to(devic
 # initialize gaussian weights
 weights_init(model)
 
-# init model singular values 
-if args.iterative:
-    if args.reg == 'spectral':
-        v_init = init_model_right_singular(model.model, tol=args.tol)
-    elif args.reg == 'eig-ub':
-        v_init = init_model_right_singular(
-            model.feature_map if hasattr(model, 'feature_map') else model.feature_maps[-1],
-            tol=args.tol
-        )
-    print("initialize top right singular direction")
-else:
-    v_init = {}
-
 # get optimizer
-opt = Adam(model.parameters(), lr=args.lr, weight_decay=args.wd)
+opt = getattr(optim, args.opt)(model.parameters(), lr=args.lr, weight_decay=args.wd)
 
 def train():
     """train a model with/without regularization"""
@@ -145,8 +136,24 @@ def train():
                 map_location=device),
             )
         except:
-            warnings.warn('Not using base model, retraining ...')
+            warnings.warn('Not finding base model, retraining ...')
+            pbar = tqdm(range(args.epochs + 1)) # relapse back to full training
+    
 
+    # init model singular values
+    if args.iterative:
+        if args.reg == 'spectral':
+            v_init = init_model_right_singular(model.model, tol=args.tol)
+        elif args.reg == 'eig-ub':
+            v_init = init_model_right_singular(
+                model.feature_map if hasattr(model, 'feature_map') else model.feature_maps[-1],
+                tol=args.tol
+            )
+        print("initialize top right singular direction")
+    else:
+        v_init = {}
+
+    # training
     for i in pbar:
         model.train()
         total_train_loss, total_train_acc = 0, 0
@@ -159,6 +166,32 @@ def train():
             # record
             total_train_loss += train_loss * len(X_train)
             total_train_acc += y_pred_logits.argmax(dim=-1).eq(y_train).sum()
+
+            # add regularization
+            if i > args.burnin and i % args.reg_freq == 0:
+                reg_loss = 0
+                if args.reg == 'cross-lip':
+                    reg_loss = cross_lipschitz_regulerizer(
+                        model, X_train, is_binary=False)
+                elif args.reg == 'eig':
+                    reg_loss = top_eig_regularizer_autograd(
+                        X_train, model.feature_map,
+                        sample_size=args.sample_size, scanbatchsize=args.scanbatchsize
+                    )
+                elif args.reg == 'eig-ub':
+                    reg_loss = top_eig_ub_regularizer_autograd(
+                        X_train, model.feature_map,
+                        max_layer=args.max_layer,
+                        iterative=args.iterative, v_init=v_init, tol=args.tol, max_update=args.max_update
+                    )
+                elif args.reg == 'spectral':
+                    reg_loss = spectral_ub_regularizer_autograd(
+                        model,
+                        iterative=args.iterative, v_init=v_init, tol=args.tol, max_update=args.max_update
+                    )
+                
+                # add to loss 
+                train_loss += args.lam * reg_loss
 
             # step
             train_loss.backward()
@@ -195,44 +228,6 @@ def train():
             pbar.set_description(f"epoch {i}")
             pbar.set_postfix(
                 {'tr_loss': train_loss.item(), 'tr_acc': train_acc.item(), 'te_loss': test_loss.item(), 'te_acc': test_acc.item()})
-        
-        # regularization
-        # TODO: change this: only regularize once per epoch
-        # regularization
-        reg_loss = None
-        if i > args.burnin and i % args.reg_freq == 0:
-            if args.reg == 'cross-lip':
-                reg_loss = cross_lipschitz_regulerizer(
-                    model, X_train, is_binary=False)
-            # elif args.reg == 'vol':
-            #     reg_loss = volume_element_regularizer_autograd(
-            #         X_train, model.feature_map,
-            #         sample_size=args.sample_size, m=args.m, scanbatchsize=args.scanbatchsize
-            #     )
-            elif args.reg == 'eig':
-                reg_loss = top_eig_regularizer_autograd(
-                    X_train, model.feature_map,
-                    sample_size=args.sample_size, scanbatchsize=args.scanbatchsize
-                )
-            elif args.reg == 'eig-ub':
-                reg_loss = top_eig_ub_regularizer_autograd(
-                    X_train, model.feature_map,
-                    max_layer=args.max_layer,
-                    iterative=args.iterative, v_init=v_init, tol=args.tol, max_update=args.max_update
-                )
-            elif args.reg == 'spectral':
-                reg_loss = spectral_ub_regularizer_autograd(
-                    model,
-                    iterative=args.iterative, v_init=v_init, tol=args.tol, max_update=args.max_update
-                )
-        
-        # regularization
-        if reg_loss is not None:
-            reg_loss *= args.lam
-            opt.zero_grad()
-            reg_loss.backward()
-            opt.step()
-
 
         if i % args.log_model == 0:
             # log final model

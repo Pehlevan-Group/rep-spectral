@@ -41,6 +41,8 @@ class SLP(nn.Module):
         self.lin1 = nn.Linear(input_dim, width)
         self.lin2 = nn.Linear(width, output_dim)
         self.width = width
+        self.input_dim = input_dim 
+        self.output_dim = output_dim
         self.nl = nl
 
         # define feature map for kernel computations
@@ -48,8 +50,14 @@ class SLP(nn.Module):
 
         self.model = nn.Sequential(self.feature_map, self.lin2, ScaleLayer(width))
 
+        self.sigmoid = nn.Sigmoid()
+
     def forward(self, x):
-        return self.model(x)
+        out = self.model(x)
+        if self.output_dim == 1:
+            return self.sigmoid(out)
+        else:
+            return out 
 
 
 class MLP(nn.Module):

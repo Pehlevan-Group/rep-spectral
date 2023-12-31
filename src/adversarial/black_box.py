@@ -44,7 +44,7 @@ class Attacker:
     def binary_search(self, x_adv: torch.Tensor, tol: float = 1e-5) -> torch.Tensor:
         """
         binary search to find a sample at the decision boundary
-        stop after a prespecified tolerance is reached
+        stop after a pre-specified tolerance is reached
 
         :param x_adv: the adversarial sample
         :param tol: a tolerance level (for l2-norm measure)
