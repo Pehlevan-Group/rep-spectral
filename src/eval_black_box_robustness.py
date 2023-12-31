@@ -33,7 +33,9 @@ parser.add_argument('--hidden-dim', default=[20], type=int, help='the number of 
 parser.add_argument('--batch-size', default=1024, type=int, help='the batchsize for training')
 parser.add_argument('--lr', default=0.1, type=float, help='learning rate')
 parser.add_argument("--nl", default='Sigmoid', type=str, help='the nonlinearity of first layer')
+parser.add_argument("--opt", default='SGD', type=str, help='the type of optimizer')
 parser.add_argument("--wd", default=0., type=float, help='weight decay')
+parser.add_argument('--mom', default=0.9, type=float, help='the momentum')
 parser.add_argument('--lam', default=1, type=float, help='the multiplier / strength of regularization')
 parser.add_argument('--reg', default="None", type=str, help='the type of regularization')
 parser.add_argument('--sample-size', default=None, type=float, 
@@ -44,6 +46,9 @@ parser.add_argument('--burnin', default=600, type=int, help='the period before w
 parser.add_argument('--reg-freq', default=5, type=int, help='the freqency of imposing regularizations')
 parser.add_argument('--max-layer', default=None, type=int, 
     help='the number of max layers to pull information from. None means the entire feature map')
+
+# iterative update
+parser.add_argument('--iterative', action='store_true', default=False, help='True to turn on iterative method')
 
 # logging
 parser.add_argument('--log-epoch', default=100, type=int, help='logging frequency')
@@ -63,6 +68,7 @@ parser.add_argument('--T', default=40, type=int, help='max iterations for attack
 parser.add_argument('--tol', default=1e-5, type=float, help='the threshold to stop binary search')
 parser.add_argument('--vmin', default=0, type=float, help='the min value of the adversarial guess range')
 parser.add_argument('--vmax', default=1, type=float, help='the max value of the adversarial guess range')
+parser.add_argument('--no-shuffle', default=False, action='store_true', help='true to turn off data shuffling in evaluation sampling')
 
 args = parser.parse_args()
 
@@ -82,7 +88,7 @@ if 'mnist' in args.data:
     input_dim, output_dim = 784, 10
 else:
     log_name, base_log_name = get_logging_name(args, 'linear_small')
-    input_dim, output_dim = 2, 1
+    input_dim, output_dim = 2, 2
 model_path = os.makedirs(os.path.join(paths['model_dir'], log_name), exist_ok=True)
 
 # load data
@@ -97,6 +103,10 @@ def load_data():
         from data import load_sin_random, CustomDataset
         X_train, X_test, y_train, y_test = load_sin_random(args.step, args.test_size, args.seed)
         train_set, test_set = CustomDataset(X_train, y_train), CustomDataset(X_test, y_test)
+    elif args.data == 'xor_symmetric':
+        from data import load_xor_symmetric, CustomDataset
+        X_train, X_test, y_train, y_test = load_xor_symmetric()
+        train_set, test_set = CustomDataset(X_train, y_train), CustomDataset(X_train, y_train) # repeat
     else:
         raise NotImplementedError(f'{args.data} not available')
     return train_set, test_set
@@ -104,8 +114,8 @@ def load_data():
 train_set, test_set = load_data()
 
 # batch to dataloader
-train_loader = DataLoader(train_set, batch_size=args.batch_size, shuffle=True)
-test_loader = DataLoader(test_set, batch_size=args.batch_size, shuffle=True)
+train_loader = DataLoader(train_set, batch_size=args.batch_size, shuffle=not args.no_shuffle)
+test_loader = DataLoader(test_set, batch_size=args.batch_size, shuffle=not args.no_shuffle)
 print(f'{args.data} data loaded')
 
 # get model

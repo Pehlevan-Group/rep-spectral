@@ -185,3 +185,6 @@ out/*
 
 # tests
 test_*
+
+# experiment record
+record.md
