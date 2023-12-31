@@ -112,6 +112,9 @@ def load_data():
         X_train, X_test, y_train, y_test = load_sin_random(args.step, args.test_size, args.seed)
     else:
         raise NotImplementedError(f'{args.data} not available')
+
+    # convert to long for CrossEntropyLoss
+    y_train, y_test = y_train.long(), y_test.long()
     return X_train, X_test, y_train, y_test
 
 X_train, X_test, y_train, y_test = load_data()

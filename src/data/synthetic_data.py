@@ -36,15 +36,15 @@ def train_test_index(
     train_idx, test_idx = idx[:-test_num], idx[-test_num:]
     return train_idx, test_idx
 
+
 def load_xor_symmetric() -> Tuple[torch.Tensor]:
     """load symmetric xor dataset"""
-    X = torch.tensor(
-        [[1., 1.], [1., -1.], [-1., 1.], [-1., -1.]]
-    )
+    X = torch.tensor([[1.0, 1.0], [1.0, -1.0], [-1.0, 1.0], [-1.0, -1.0]])
     y = torch.tensor([0, 1, 1, 0])
     X_test = torch.empty((0, 2))
     y_test = torch.empty(0)
     return X, X_test, y, y_test
+
 
 def load_linear_boundary(
     step: int = 20, test_size: float = 0.5, seed: int = 400

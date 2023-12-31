@@ -18,16 +18,16 @@ def get_logging_name(args, mode: str) -> List[str]:
     """
     # modify reg name
     reg_name = args.reg
-    if reg_name in ["spectral", 'eig-ub'] and args.iterative:
+    if reg_name in ["spectral", "eig-ub"] and args.iterative:
         reg_name += "-iterative"
-    elif reg_name == 'vol':
+    elif reg_name == "vol":
         reg_name += f"_m{args.m}"
-    
+
     # choose log and unregularized log name
     if mode == "linear_small":
         log_name = (
             f"{args.data}_step{args.step}_ts{args.test_size}_w{args.hidden_dim}"
-            + f"_lr{args.lr}_opt{args.opt}_wd{args.wd}_mom{args.mom}_nl{args.nl}_lam{args.lam}" 
+            + f"_lr{args.lr}_opt{args.opt}_wd{args.wd}_mom{args.mom}_nl{args.nl}_lam{args.lam}"
             + f"_reg{reg_name}"
             + f"_ss{args.sample_size}_e{args.epochs}_b{args.burnin}_seed{args.seed}"
         )

@@ -41,7 +41,7 @@ class SLP(nn.Module):
         self.lin1 = nn.Linear(input_dim, width)
         self.lin2 = nn.Linear(width, output_dim)
         self.width = width
-        self.input_dim = input_dim 
+        self.input_dim = input_dim
         self.output_dim = output_dim
         self.nl = nl
 
@@ -57,7 +57,7 @@ class SLP(nn.Module):
         if self.output_dim == 1:
             return self.sigmoid(out)
         else:
-            return out 
+            return out
 
 
 class MLP(nn.Module):

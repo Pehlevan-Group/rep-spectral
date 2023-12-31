@@ -100,7 +100,7 @@ def top_eig_ub_regularizer_autograd(
                 temp = W @ v_new
                 eig = temp.T @ temp
                 eig = eig[0][0]
-                
+
                 # update singular values
                 v_init[layer] = v_new
             else:
