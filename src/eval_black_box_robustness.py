@@ -89,7 +89,6 @@ if 'mnist' in args.data:
 else:
     log_name, base_log_name = get_logging_name(args, 'linear_small')
     input_dim, output_dim = 2, 2
-model_path = os.makedirs(os.path.join(paths['model_dir'], log_name), exist_ok=True)
 
 # load data
 def load_data():
@@ -165,14 +164,14 @@ def get_samples() -> Tuple[torch.Tensor]:
 
     # keep first eval_sample_size many samples    
     correct_samples = correct_samples[:args.eval_sample_size]
-    if len(target_samples) == 0: target_samples = None # for untargeted attack, chenge to None
+    if len(target_samples) == 0: target_samples = None # for untargeted attack, change to None
     return correct_samples, target_samples
 
 @torch.no_grad()
 def attack_all(samples: torch.Tensor, target_samples: torch.Tensor) -> List[float]:
     """
-    perform adversarial attck on correctly predicted samples
-    - targeted: pick a random sample of the target class as our intial guess
+    perform adversarial attack on correctly predicted samples
+    - targeted: pick a random sample of the target class as our initial guess
     - untargeted: pass None and randomized target
 
     :param samples: batched samples
