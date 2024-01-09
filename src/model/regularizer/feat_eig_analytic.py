@@ -1,5 +1,5 @@
 """
-hosts a list of geometric-inspired regularizers (analytic)
+hosts a list of feature map regularizers (analytic)
 """
 
 # load packages

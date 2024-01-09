@@ -1,5 +1,5 @@
 """
-hosts a list of geometirc related regularizers (autograd)
+hosts a list of feature map regularization (autograd)
 """
 
 # load packages
