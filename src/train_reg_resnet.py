@@ -128,23 +128,27 @@ def train():
             total_train_loss += train_loss * len(X_train)
             total_train_acc += y_pred_logits.argmax(dim=-1).eq(y_train).sum()
 
-            # add regularization
-            if i > args.burnin and i % args.reg_freq == 0:
-                reg_loss = 0
-                if args.reg == 'eig-ub':
-                    reg_loss = top_eig_ub_regularizer_conv(model)
-                elif args.reg == 'spectral':
-                    reg_loss = spectral_ub_regularizer_conv(model)
-                
-                # add to loss 
-                train_loss += args.lam * reg_loss
-
             # step
             train_loss.backward()
             opt.step()
         
         train_loss = total_train_loss / len(train_set)
         train_acc = total_train_acc / len(train_set)
+
+        # * add regularization (after each epoch)
+        # TODO: tested a separate loop
+        if i > args.burnin and i % args.reg_freq == 0:
+            reg_loss = None
+            if args.reg == 'eig-ub':
+                reg_loss = top_eig_ub_regularizer_conv(model)
+            elif args.reg == 'spectral':
+                reg_loss = spectral_ub_regularizer_conv(model)
+
+            if reg_loss is not None:
+                opt.zero_grad()
+                reg_loss *= args.lam 
+                reg_loss.backward()
+                opt.step()
 
         if i % args.log_epoch == 0:
             # testing 
