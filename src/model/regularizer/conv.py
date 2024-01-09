@@ -6,6 +6,7 @@ regularization for convolution layers, assume all strides are square
 import torch
 import torch.nn as nn
 
+
 def top_eig_ub_regularizer_conv(model: nn.Module) -> torch.Tensor:
     """
     regularize up to feature map
@@ -14,12 +15,13 @@ def top_eig_ub_regularizer_conv(model: nn.Module) -> torch.Tensor:
     reg_term = sum(eigvals)
     return reg_term
 
+
 def spectral_ub_regularizer_conv(model: nn.Module) -> torch.Tensor:
     """add final linear head regularization"""
     reg_term = top_eig_ub_regularizer_conv(model)
 
-    # last linear head 
-    W = model.linear.weight 
+    # last linear head
+    W = model.linear.weight
     eig = torch.linalg.eigvalsh(W.T @ W).max()
-    reg_term += eig 
+    reg_term += eig
     return reg_term

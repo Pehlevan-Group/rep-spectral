@@ -228,9 +228,9 @@ class ResNet(nn.Module):
         )
         self.bn1 = nn.BatchNorm2d(64)
 
-        self.get_eigvals_funcs = [
-            self.conv1.get_conv_layer_eigvals
-        ]  # * store get eigenvalue functions binding to the instances
+        self.get_eigvals_funcs = (
+            []
+        )  # * store get eigenvalue functions binding to the instances
         self.layer1 = self._make_layer(block, 64, num_blocks[0], stride=1)
         self.layer2 = self._make_layer(block, 128, num_blocks[1], stride=2)
         self.layer3 = self._make_layer(block, 256, num_blocks[2], stride=2)

@@ -13,7 +13,7 @@ def get_logging_name(args, mode: str) -> List[str]:
     :param mode: indication of which files
         - linear_small: no batch size
         - linear_large: with batch size
-        - deep: ResNet, SimCLR
+        - conv: ResNet, SimCLR
     :return a tuple of strings, the base model name and regularized model name
     """
     # modify reg name
@@ -53,6 +53,16 @@ def get_logging_name(args, mode: str) -> List[str]:
             + f"_e{args.epochs}_seed{args.seed}"
         )
 
+    elif mode == "conv":
+        base_log_name = (
+            f"{args.data}_m{args.model}_bs{args.batch_size}_lr{args.lr}_opt{args.opt}_wd{args.wd}"
+            + f"_mom{args.mom}_nl{args.nl}_regNone_e{args.epochs}_seed{args.seed}"
+        )
+        log_name = (
+            f"{args.data}_m{args.model}_bs{args.batch_size}_lr{args.lr}_opt{args.opt}_wd{args.wd}"
+            + f"_mom{args.mom}_nl{args.nl}_lam{args.lam}_reg{reg_name}"
+            + f"_e{args.epochs}_b{args.burnin}_seed{args.seed}_rf{args.reg_freq}"
+        )
     else:
         raise NotImplementedError()
 
