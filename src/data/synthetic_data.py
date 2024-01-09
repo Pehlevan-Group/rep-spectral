@@ -45,6 +45,25 @@ def load_xor_symmetric() -> Tuple[torch.Tensor]:
     y_test = torch.empty(0)
     return X, X_test, y, y_test
 
+def load_xor_noisy(step: int = 20, std: float = 0.2, seed: int=400) -> Tuple[torch.Tensor]:
+    """load noisy xor dataset"""
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    # positive class
+    X1 = np.random.normal([1, 1], std, (step, 2))
+    X2 = np.random.normal([-1, -1], std, (step, 2))
+    # negative class
+    X3 = np.random.normal([-1, 1], std, (step, 2))
+    X4 = np.random.normal([1, -1], std, (step, 2))
+
+    X = torch.tensor(np.vstack([X1, X2, X3, X4])).float()
+    y = torch.tensor([0] * step * 2 + [1] * step * 2)
+
+    X_test = torch.empty((0, 2))
+    y_test = torch.empty(0)
+    return X, X_test, y, y_test
+    
+
 
 def load_linear_boundary(
     step: int = 20, test_size: float = 0.5, seed: int = 400
