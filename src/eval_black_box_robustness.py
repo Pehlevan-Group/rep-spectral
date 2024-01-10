@@ -203,24 +203,28 @@ def attack_all(samples: torch.Tensor, target_samples: torch.Tensor) -> List[floa
     :param target_samples: batch samples of target class
     :param return l2 adversarial distance
     """
+    # batch adversarial samples
+    from adversarial import CustomAdversarialDataset
+    adversarial_dataset = CustomAdversarialDataset(samples, target_samples)
+    adversarial_dataloader = DataLoader(
+        adversarial_dataset, batch_size=args.batch_size, shuffle=False
+    )
+
+    # record adversarial distances
     dists = []
-    for sample in tqdm(samples):
+    for sample, target_sample in tqdm(adversarial_dataloader):
         # keep first dimension the batch dimension
-        sample = sample.unsqueeze(dim=0).to(device)
-        
-        # targeted: draw a random one 
-        if target_samples is not None:
-            target_sample = target_samples[torch.randperm(len(target_samples))[[1]]]
+        sample = sample.to(device)
+        if target_sample.shape[-1] > 0: # targeted
             target_sample = target_sample.to(device)
-        # untargeted
-        else:
-            target_sample = None
-            
+        else:                      # untargeted
+            target_sample = None 
         attacker = Attacker(model, sample, target_sample, args.tol, vmin=args.vmin, vmax=args.vmax, T=args.T)
         perturbed_sample = attacker.attack()
 
-        # get distance
-        dists.append((perturbed_sample - sample).norm(p=2).item())
+        # get distance (treat each observation as a vector)
+        cur_dists = (perturbed_sample - sample).flatten(start_dim=1).norm(dim=-1).tolist()
+        dists += cur_dists
     
     return dists
 
