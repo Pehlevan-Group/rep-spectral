@@ -116,7 +116,7 @@ model = SLP(input_dim=784, width=args.hidden_dim, output_dim=10, nl=nl).to(devic
 weights_init(model)
 
 # get optimizer
-opt = getattr(optim, args.opt)(model.parameters(), lr=args.lr, weight_decay=args.wd)
+opt = getattr(optim, args.opt)(model.parameters(), lr=args.lr, weight_decay=args.wd, momentum=args.mom)
 
 def train():
     """train a model with/without regularization"""

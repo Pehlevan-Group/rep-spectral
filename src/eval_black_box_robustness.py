@@ -28,6 +28,7 @@ parser.add_argument("--test-size", default=0.5, type=float, help='the proportion
 
 # model
 parser.add_argument('--hidden-dim', default=[20], type=int, help='the number of hidden units', nargs='+')
+parser.add_argument('--model', default="34", type=str, help='the model type for ResNet')
 
 # training
 parser.add_argument('--batch-size', default=1024, type=int, help='the batchsize for training')
@@ -83,9 +84,11 @@ if isinstance(args.hidden_dim, list) and len(args.hidden_dim) == 1: args.hidden_
 
 
 # set up summary writer
-if 'mnist' in args.data: 
+if 'mnist' == args.data: 
     log_name, base_log_name = get_logging_name(args, 'linear_large')
     input_dim, output_dim = 784, 10
+elif "cifar10" == args.data:
+    log_name, base_log_name = get_logging_name(args, 'conv')
 else:
     log_name, base_log_name = get_logging_name(args, 'linear_small')
     input_dim, output_dim = 2, 2
@@ -110,6 +113,9 @@ def load_data():
         from data import load_xor_noisy, CustomDataset
         X_train, X_test, y_train, y_test = load_xor_noisy(args.step, 0.3, args.seed) # * tune std here
         train_set, test_set = CustomDataset(X_train, y_train), CustomDataset(X_train, y_train) # repeat
+    elif args.data == "cifar10":
+        from data import cifar10
+        train_set, test_set = cifar10(paths['data_dir'])
     else:
         raise NotImplementedError(f'{args.data} not available')
     return train_set, test_set
@@ -122,11 +128,26 @@ test_loader = DataLoader(test_set, batch_size=args.batch_size, shuffle=not args.
 print(f'{args.data} data loaded')
 
 # get model
-nl = getattr(nn, args.nl)()
-if isinstance(args.hidden_dim, list):
-    model = MLP([input_dim, *args.hidden_dim, output_dim], nl=nl).to(device)
-else:
-    model = SLP(input_dim=input_dim, width=args.hidden_dim, output_dim=output_dim, nl=nl).to(device)
+def load_model():
+    """select model"""
+    # select nonlinearity 
+    nl = getattr(nn, args.nl)()
+
+    # init model
+    if args.data == 'cifar10':
+        from model import ResNet18, ResNet34, ResNet50, ResNet101, ResNet152
+        model = eval(f"ResNet{args.model}")(nl=nl)
+    else:
+        if isinstance(args.hidden_dim, list):
+            model = MLP([input_dim, *args.hidden_dim, output_dim], nl=nl)
+        else:
+            model = SLP(input_dim=input_dim, width=args.hidden_dim, output_dim=output_dim, nl=nl)
+    
+    # send to proper device
+    model = model.to(device)
+    return model 
+
+model = load_model()
 model.load_state_dict(
     torch.load(
         os.path.join(paths['model_dir'], base_log_name if args.reg == "None" else log_name, f'model_e{args.eval_epoch}.pt'

@@ -1,2 +1,2 @@
-from .MLP import SLP, MLP, weights_init
+from .architectures import *
 from .regularizer import *
