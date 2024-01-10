@@ -184,7 +184,7 @@ commands/*
 out/*
 
 # tests
-test_*
+test_space.py
 
 # experiment record
 record.md
