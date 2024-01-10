@@ -80,7 +80,7 @@ train_set, test_set = load_data()
 
 # batch to dataloader
 train_loader = DataLoader(train_set, batch_size=args.batch_size, shuffle=True)
-test_loader = DataLoader(test_set, batch_size=args.batch_size, shuffle=True)
+test_loader = DataLoader(test_set, batch_size=args.batch_size, shuffle=False)
 print(f'{args.data} data loaded')
 
 # get model
@@ -88,7 +88,7 @@ nl = getattr(nn, args.nl)()
 model = eval(f"ResNet{args.model}")(nl=nl).to(device)
 
 # get optimizer
-opt = getattr(optim, args.opt)(model.parameters(), lr=args.lr, weight_decay=args.wd)
+opt = getattr(optim, args.opt)(model.parameters(), lr=args.lr, weight_decay=args.wd, momentum=args.mom)
 
 def train():
     """train a model with/without regularization"""
