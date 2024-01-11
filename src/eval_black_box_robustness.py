@@ -63,6 +63,7 @@ parser.add_argument('--scanbatchsize', default=20, type=int, help='the number of
 # ========= evaluation arguments =======
 parser.add_argument('--eval-epoch', default=200, type=int, help='the epoch of model to be evaluated at')
 parser.add_argument('--target', default=None, type=int, help='the target adversarial class')
+parser.add_argument('--adv-batch-size', default=16, type=int, help='the number of samples to be batched evaluated at a time')
 parser.add_argument('--eval-sample-size', default=2000, type=int, help='the number of samples to be evaluated')
 parser.add_argument('--attacker', default='TangentAttack', type=str, help='the type of attack')
 parser.add_argument('--T', default=40, type=int, help='max iterations for attack')
@@ -207,7 +208,7 @@ def attack_all(samples: torch.Tensor, target_samples: torch.Tensor) -> List[floa
     from adversarial import CustomAdversarialDataset
     adversarial_dataset = CustomAdversarialDataset(samples, target_samples)
     adversarial_dataloader = DataLoader(
-        adversarial_dataset, batch_size=args.batch_size, shuffle=False
+        adversarial_dataset, batch_size=args.adv_batch_size, shuffle=False
     )
 
     # record adversarial distances
