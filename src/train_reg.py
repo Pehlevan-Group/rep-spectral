@@ -106,7 +106,7 @@ def load_data():
         X_train, X_test, y_train, y_test = load_xor_symmetric()
     elif args.data == 'xor_noisy':
         from data import load_xor_noisy
-        X_train, X_test, y_train, y_test = load_xor_noisy(args.step, 0.3, args.seed) # * tune variation here
+        X_train, X_test, y_train, y_test = load_xor_noisy(args.step, 0.2, args.seed) # * tune variation here
     elif args.data == 'sin':
         from data import load_sin_boundary
         X_train, X_test, y_train, y_test = load_sin_boundary(args.step, args.test_size, args.seed)

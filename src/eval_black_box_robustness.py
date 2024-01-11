@@ -112,7 +112,7 @@ def load_data():
         train_set, test_set = CustomDataset(X_train, y_train), CustomDataset(X_train, y_train) # repeat
     elif args.data == 'xor_noisy':
         from data import load_xor_noisy, CustomDataset
-        X_train, X_test, y_train, y_test = load_xor_noisy(args.step, 0.3, args.seed) # * tune std here
+        X_train, X_test, y_train, y_test = load_xor_noisy(args.step, 0.2, args.seed) # * tune std here
         train_set, test_set = CustomDataset(X_train, y_train), CustomDataset(X_train, y_train) # repeat
     elif args.data == "cifar10":
         from data import cifar10

@@ -6,6 +6,7 @@ Implementation of black-box attackers
 """
 
 # load packages
+import warnings
 import logging
 import numpy as np
 import torch
@@ -383,6 +384,27 @@ class TangentAttack(Attacker):
                 break
             else:
                 cur_radius /= 2
+
+            # ! HARD STOP: not in original implementation
+            # * if no tangent point found due to numerical issues, just bump
+            # * the boundary a bit away from the sample towards the adversarial region
+            if torch.all(cur_radius < 1e-8):
+                adv_direction = cur_x_bound - cur_x
+                adv_direction_flatten = adv_direction.flatten(start_dim=1)
+                adv_direction_unit = (
+                    adv_direction_flatten
+                    / adv_direction_flatten.norm(dim=-1, keepdim=True)
+                ).reshape(*adv_direction.shape)
+                tangent_point = cur_x_bound + 1e-4 * adv_direction_unit
+
+                # append final
+                idx_insert = torch.hstack((idx_insert, idx_tensor))
+                tangent_point_insert = torch.vstack(
+                    (tangent_point_insert, tangent_point)
+                )
+
+                warnings.warn("tangent point failed, hard stop bumping triggered")
+                break
 
         # keep insertion order
         tangent_points = torch.zeros_like(x)
