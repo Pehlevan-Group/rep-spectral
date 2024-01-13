@@ -128,6 +128,7 @@ class TangentAttack(Attacker):
         T: int = 40,
         init_num_eval: int = 100,
         max_num_evals: int = 10000,
+        device='cpu'
     ) -> None:
         """
         Initialize tangent attacker
@@ -145,12 +146,13 @@ class TangentAttack(Attacker):
         :param T: maximum iterations to find tangent point + projection
         :param init_num_eval: the starting number of evaluations, scales
         :param max_num_evals: give an bound number of proposals
+        :param device: cpu / cuda
         """
         super().__init__()
         self.model = model
         self.x_samples = x
         self.batch_size = adv_batch_size
-        self.device = x.device
+        self.device = device
         self.dim = np.prod([*x.shape[1:]])
         self.shapes = x.shape[1:]
 

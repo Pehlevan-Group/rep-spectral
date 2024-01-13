@@ -209,7 +209,8 @@ def attack_all(samples: torch.Tensor, target_samples: torch.Tensor) -> List[floa
         model, samples, target_samples, 
         args.adv_batch_size,
         args.tol, 
-        vmin=args.vmin, vmax=args.vmax, T=args.T
+        vmin=args.vmin, vmax=args.vmax, T=args.T,
+        device=device
     )
     dists, _ = attacker.attack()
     return dists.tolist()
