@@ -230,7 +230,7 @@ class TangentAttack(Attacker):
                         self.device
                     )
                     for noise_idx in rand_perm_idx:
-                        random_noise_candidate = self.x_samples[[noise_idx]].to(self.device)
+                        random_noise_candidate = self.x_samples[noise_idx].unsqueeze(0).to(self.device)
                         random_noise_candidate_pred = self.get_decision(
                             random_noise_candidate
                         )
