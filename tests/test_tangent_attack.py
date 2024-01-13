@@ -66,13 +66,14 @@ class TestTangent:
     def test_boundary(self):
         """verify that the bondary is indeed the desired boundary, within tolerance"""
         # torch.manual_seed(seed)  # * for reproducibility
-        attacker = TangentAttack(model, X, None, vmin=-5, vmax=5)
-        cur = attacker._initialize()
+        attacker = TangentAttack(model, X, None, adv_batch_size=4, vmin=-5, vmax=5)
+        y = attacker.get_decision(X)
+        cur = attacker._initialize(X, None, y, None)
         cur_dists = (
             (cur - X).view(attacker.batch_size, -1).norm(p=2, dim=-1, keepdim=True)
         )
         deltas = attacker._select_delta(1, cur_dists)
-        normal_vecs = attacker._estimate_normal_direction(cur, 5000, deltas)
+        normal_vecs = attacker._estimate_normal_direction(cur, y, 5000, deltas)
 
         assert (normal_vecs[0] - (-normal_vec_target)).norm() < 0.5
         assert (normal_vecs[1] - (-normal_vec_target)).norm() < 0.5
@@ -81,15 +82,13 @@ class TestTangent:
 
     def test_dist(self):
         # torch.manual_seed(seed)  # * for reproducibility
-        attacker = TangentAttack(model, X, None, vmin=-2, vmax=2)
-        X_adv = attacker.attack()
-        dists = (X - X_adv).norm(p=2, dim=-1)
+        attacker = TangentAttack(model, X, None, adv_batch_size=4, vmin=-2, vmax=2)
+        dists, X_adv = attacker.attack()
 
         assert (dists / dists_target - 1).abs().max() < 0.01
 
     def test_dist2(self):
-        attacker = TangentAttack(model2, X2, None, vmin=-1.5, vmax=1.5, T=100)
-        X_adv = attacker.attack()
-        dists = (X2 - X_adv).flatten(start_dim=1).norm(p=2, dim=-1)
+        attacker = TangentAttack(model2, X2, None, adv_batch_size=4, vmin=-1.5, vmax=1.5, T=100)
+        dists, X_adv = attacker.attack()
 
         assert (dists / dists_target2 - 1).abs().max() < 0.05

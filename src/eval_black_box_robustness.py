@@ -154,6 +154,7 @@ model.load_state_dict(
         os.path.join(paths['model_dir'], base_log_name if args.reg == "None" else log_name, f'model_e{args.eval_epoch}.pt'
     ), map_location=device)
 )
+model.eval()
 
 # get attacker
 def get_attacker():
@@ -204,30 +205,14 @@ def attack_all(samples: torch.Tensor, target_samples: torch.Tensor) -> List[floa
     :param target_samples: batch samples of target class
     :param return l2 adversarial distance
     """
-    # batch adversarial samples
-    from adversarial import CustomAdversarialDataset
-    adversarial_dataset = CustomAdversarialDataset(samples, target_samples)
-    adversarial_dataloader = DataLoader(
-        adversarial_dataset, batch_size=args.adv_batch_size, shuffle=False
+    attacker = Attacker(
+        model, samples, target_samples, 
+        args.adv_batch_size,
+        args.tol, 
+        vmin=args.vmin, vmax=args.vmax, T=args.T
     )
-
-    # record adversarial distances
-    dists = []
-    for sample, target_sample in tqdm(adversarial_dataloader):
-        # keep first dimension the batch dimension
-        sample = sample.to(device)
-        if target_sample.shape[-1] > 0: # targeted
-            target_sample = target_sample.to(device)
-        else:                      # untargeted
-            target_sample = None 
-        attacker = Attacker(model, sample, target_sample, args.tol, vmin=args.vmin, vmax=args.vmax, T=args.T)
-        perturbed_sample = attacker.attack()
-
-        # get distance (treat each observation as a vector)
-        cur_dists = (perturbed_sample - sample).flatten(start_dim=1).norm(dim=-1).tolist()
-        dists += cur_dists
-    
-    return dists
+    dists, _ = attacker.attack()
+    return dists.tolist()
 
 def record(dists: List[float]):
     """dump computed distance to files"""
