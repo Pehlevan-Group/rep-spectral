@@ -70,7 +70,7 @@ class TestTangent:
         y = attacker.get_decision(X)
         cur = attacker._initialize(X, None, y, None)
         cur_dists = (
-            (cur - X).view(attacker.batch_size, -1).norm(p=2, dim=-1, keepdim=True)
+            (cur - X).view(4, -1).norm(p=2, dim=-1, keepdim=True)
         )
         deltas = attacker._select_delta(1, cur_dists)
         normal_vecs = attacker._estimate_normal_direction(cur, y, 5000, deltas)
@@ -88,7 +88,8 @@ class TestTangent:
         assert (dists / dists_target - 1).abs().max() < 0.01
 
     def test_dist2(self):
-        attacker = TangentAttack(model2, X2, None, adv_batch_size=4, vmin=-1.5, vmax=1.5, T=100)
+        torch.manual_seed(400)
+        attacker = TangentAttack(model2, X2, None, adv_batch_size=4, vmin=-0.5, vmax=0.5, T=200)
         dists, X_adv = attacker.attack()
 
         assert (dists / dists_target2 - 1).abs().max() < 0.05

@@ -72,8 +72,9 @@ class Attacker:
         :return a sample at the adversarial boundary
         """
         num_dims = len(x_adv.shape) - 1
-        lefts = torch.zeros((self.batch_size, *([1] * num_dims))).to(x_adv.device)
-        rights = torch.ones((self.batch_size, *([1] * num_dims))).to(x_adv.device)
+        cur_batch_size = x_adv.shape[0]
+        lefts = torch.zeros((cur_batch_size, *([1] * num_dims))).to(x_adv.device)
+        rights = torch.ones((cur_batch_size, *([1] * num_dims))).to(x_adv.device)
         # binary search
         while torch.max((rights - lefts)) > tol:
             mids = (lefts + rights) / 2
@@ -151,7 +152,6 @@ class TangentAttack(Attacker):
         super().__init__()
         self.model = model
         self.x_samples = x
-        self.batch_size = adv_batch_size
         self.device = device
         self.dim = np.prod([*x.shape[1:]])
         self.shapes = x.shape[1:]
@@ -200,9 +200,16 @@ class TangentAttack(Attacker):
             )
             failure_count = 0
             while failure_count < max_search_times:
-                random_noise = torch.zeros_like(x_original).uniform_(
-                    self.vmin, self.vmax
-                )
+                if len(self.shapes) == 2: # 1D input 
+                    random_noise = torch.zeros_like(x_original).uniform_(
+                        self.vmin, self.vmax
+                    )
+                else: # * cifar10 (more efficient sampling)
+                    random_noise = torch.zeros_like(x_original).uniform_(
+                        self.vmin, self.vmax
+                    ) + x_original
+                    random_noise = random_noise.clamp(min=-3, max=3)
+                
                 random_noise_pred = self.get_decision(random_noise)
                 failure_count += 1
 
@@ -273,11 +280,12 @@ class TangentAttack(Attacker):
         :param delta: the scale of perturbation
         :return normal directions pointing to the adversarial region
         """
-        deltas = delta.reshape(self.batch_size, *([1] * (len(self.shapes) + 1)))
+        cur_batch_size = x_bounds.shape[0]
+        deltas = delta.reshape(cur_batch_size, *([1] * (len(self.shapes) + 1)))
         # l2-norm perturbation
         rand_perturbation = (
             torch.randn(
-                *[self.batch_size, num_evals, *self.shapes], device=x_bounds.device
+                *[cur_batch_size, num_evals, *self.shapes], device=x_bounds.device
             )
             * deltas
         )
@@ -289,12 +297,12 @@ class TangentAttack(Attacker):
                 -1, *self.shapes
             )  # bind batch and num_evals dimension together
         ).reshape(
-            self.batch_size, num_evals, 1
+            cur_batch_size, num_evals, 1
         )  # convert back to shape prior to binding
         label_changed = (perturbed_prediction != y[:, None, None]).float()
 
         # label_changed is of shape (batch_size, num_eval, 1)
-        pre_weights = label_changed.reshape(self.batch_size, num_evals) * 2 - 1
+        pre_weights = label_changed.reshape(cur_batch_size, num_evals) * 2 - 1
         weights = pre_weights - pre_weights.mean(dim=-1, keepdim=True)
         weights -= (
             (pre_weights == -1).all(dim=-1, keepdim=True).float()
@@ -305,7 +313,7 @@ class TangentAttack(Attacker):
 
         # get normal direction
         normal_directions = (
-            weights.reshape(self.batch_size, num_evals, *([1] * len(self.shapes))) * rv
+            weights.reshape(cur_batch_size, num_evals, *([1] * len(self.shapes))) * rv
         ).mean(
             dim=1
         )  # collapse num_eval dimension
@@ -401,12 +409,13 @@ class TangentAttack(Attacker):
         """
         # normalize search radius in proportional to the distance between the current iterate
         # and the original data sample
-        radius = (x - x_bound).reshape(self.batch_size, -1).norm(
+        cur_batch_size = x.shape[0]
+        radius = (x - x_bound).reshape(cur_batch_size, -1).norm(
             p=2, dim=-1, keepdim=True
         ) / cur_iter ** (1 / 2)
 
         # sequential passing in: keep shrinking radius if not yet success, otherwise record
-        idx_tensor = torch.arange(self.batch_size, device=self.device)
+        idx_tensor = torch.arange(cur_batch_size, device=self.device)
         cur_x, cur_x_bound, cur_normal_vec, cur_radius = x, x_bound, normal_vec, radius
         idx_insert = torch.empty(0).to(self.device).long()
         tangent_point_insert = torch.empty(0, *self.shapes).to(self.device)
@@ -487,11 +496,12 @@ class TangentAttack(Attacker):
         :param i: the current iteration to scale with
         :param dist: the current distance between the perturbed sample and original sample
         """
+        cur_batch_size = dists.shape[0]
         if i == 1:
             return (
                 0.1
                 * (self.vmax - self.vmin)
-                * torch.ones((self.batch_size, 1)).to(self.device)
+                * torch.ones((cur_batch_size, 1)).to(self.device)
             )
         else:
             return dists * self.gamma / self.dim
@@ -514,7 +524,7 @@ class TangentAttack(Attacker):
 
             cur = self._initialize(x, x_target, y, y_target)
             cur_dists = (
-                (cur - x).view(self.batch_size, -1).norm(p=2, dim=-1, keepdim=True)
+                (cur - x).view(x.shape[0], -1).norm(p=2, dim=-1, keepdim=True)
             )
             for i in range(1, self.T + 1):
                 # get delta
@@ -538,7 +548,7 @@ class TangentAttack(Attacker):
 
                 # evaluate current distance
                 cur_dists = (
-                    (cur - x).view(self.batch_size, -1).norm(p=2, dim=-1, keepdim=True)
+                    (cur - x).view(x.shape[0], -1).norm(p=2, dim=-1, keepdim=True)
                 )
                 logging.info(
                     f"Iteration {i}: average distance = {cur_dists.mean():.6f}"
