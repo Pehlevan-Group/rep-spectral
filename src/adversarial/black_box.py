@@ -546,6 +546,6 @@ class TangentAttack(Attacker):
 
             # append to dists
             dists = torch.hstack((dists, cur_dists.detach().cpu().flatten()))
-            adv_samples = torch.vstack((adv_samples, cur))
+            adv_samples = torch.vstack((adv_samples, cur.detach().cpu()))
         
         return dists, adv_samples
