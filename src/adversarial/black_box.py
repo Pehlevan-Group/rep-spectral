@@ -126,10 +126,12 @@ class TangentAttack(Attacker):
         gamma: float = 1.0,
         vmin: float = 0.0,
         vmax: float = 1.0,
+        perturb_vmin: float = -0.5,
+        perturb_vmax: float = 0.5,
         T: int = 40,
         init_num_eval: int = 100,
         max_num_evals: int = 10000,
-        device='cpu'
+        device="cpu",
     ) -> None:
         """
         Initialize tangent attacker
@@ -144,6 +146,7 @@ class TangentAttack(Attacker):
         :param tol: the threshold for stopping the binary search
         :param gamma: the scalar for the number of evaluations
         :param vmin, vmax: the feasible range of inputs, typically within 0 and 1 for images
+        :param perturb_vmin/vamx: the perturbation min max range for efficient high dimensional sampling
         :param T: maximum iterations to find tangent point + projection
         :param init_num_eval: the starting number of evaluations, scales
         :param max_num_evals: give an bound number of proposals
@@ -165,6 +168,8 @@ class TangentAttack(Attacker):
         # feasible range of input
         self.vmin = vmin
         self.vmax = vmax
+        self.perturb_vmax = perturb_vmax
+        self.perturb_vmin = perturb_vmin
 
         # parameters
         self.tol = tol
@@ -200,16 +205,19 @@ class TangentAttack(Attacker):
             )
             failure_count = 0
             while failure_count < max_search_times:
-                if len(self.shapes) == 2: # 1D input 
+                if len(self.shapes) == 2:  # 1D input
                     random_noise = torch.zeros_like(x_original).uniform_(
                         self.vmin, self.vmax
                     )
-                else: # * cifar10 (more efficient sampling)
-                    random_noise = torch.zeros_like(x_original).uniform_(
-                        self.vmin, self.vmax
-                    ) + x_original
+                else:  # * cifar10 (more efficient sampling)
+                    random_noise = (
+                        torch.zeros_like(x_original).uniform_(
+                            self.perturb_vmin, self.perturb_vmax
+                        )
+                        + x_original
+                    )
                     random_noise = random_noise.clamp(min=-3, max=3)
-                
+
                 random_noise_pred = self.get_decision(random_noise)
                 failure_count += 1
 
@@ -237,7 +245,9 @@ class TangentAttack(Attacker):
                         self.device
                     )
                     for noise_idx in rand_perm_idx:
-                        random_noise_candidate = self.x_samples[noise_idx].unsqueeze(0).to(self.device)
+                        random_noise_candidate = (
+                            self.x_samples[noise_idx].unsqueeze(0).to(self.device)
+                        )
                         random_noise_candidate_pred = self.get_decision(
                             random_noise_candidate
                         )
@@ -347,10 +357,10 @@ class TangentAttack(Attacker):
         normal_vecs = normal_vecs.flatten(start_dim=1)
 
         # prepare
+        # assume normal vecs are already normalized (which is indeed the case)
         ox = x - ball_centers
         sin_alpha = -(ox * normal_vecs).sum(dim=-1, keepdim=True) / (
             torch.norm(ox, dim=-1, p=2, keepdim=True)
-            * torch.norm(normal_vecs, dim=-1, p=2, keepdim=True)
         )
         cos_alpha = torch.sqrt(
             (1 - torch.square(sin_alpha)).clamp(min=0)
@@ -360,24 +370,22 @@ class TangentAttack(Attacker):
             (1 - torch.square(cos_beta)).clamp(min=0)
         )  # numerical fix
         sin_gamma = sin_beta * cos_alpha - cos_beta * sin_alpha
-        cos_gamma = sin_beta * cos_alpha + cos_beta * sin_alpha
+        cos_gamma = cos_beta * cos_alpha + sin_beta * sin_alpha
         k_height = radius * sin_gamma
 
         # get tangent point
-        numerator = (
-            ox
-            - (ox * normal_vecs).sum(dim=-1, keepdim=True)
-            * normal_vecs
-            / torch.norm(normal_vecs, dim=-1, keepdim=True) ** 2
-        )
+        numerator = ox - (ox * normal_vecs).sum(dim=-1, keepdim=True) * normal_vecs
+        # * with very small chance, `numerator` will be close to zero,
+        # * meaning normal_vecs and ox are colinear
         ok_prime = (
-            (numerator / torch.norm(numerator, dim=-1, keepdim=True, p=2))
+            (
+                numerator
+                / torch.norm(numerator, dim=-1, keepdim=True, p=2).clamp(min=1e-8)
+            )
             * radius
             * cos_gamma
         )
-        ok = ok_prime + k_height * normal_vecs / torch.norm(
-            normal_vecs, dim=-1, keepdim=True
-        )
+        ok = ok_prime + k_height * normal_vecs
 
         # ? perturbed vectors are all dense ?
         result = ok + ball_centers
@@ -513,7 +521,7 @@ class TangentAttack(Attacker):
         for x, x_target in tqdm(self.adversarial_dataloader):
             # keep first dimension the batch dimension
             x = x.to(self.device)
-            if x_target.shape[-1] > 0:  # targetd:
+            if x_target.shape[-1] > 0:  # targeted:
                 x_target = x_target.to(self.device)
             else:  # untargeted
                 x_target = None
@@ -523,9 +531,7 @@ class TangentAttack(Attacker):
             y_target = None if x_target is None else self.get_decision(x_target)
 
             cur = self._initialize(x, x_target, y, y_target)
-            cur_dists = (
-                (cur - x).view(x.shape[0], -1).norm(p=2, dim=-1, keepdim=True)
-            )
+            cur_dists = (cur - x).view(x.shape[0], -1).norm(p=2, dim=-1, keepdim=True)
             for i in range(1, self.T + 1):
                 # get delta
                 deltas = self._select_delta(i, cur_dists)
@@ -557,5 +563,5 @@ class TangentAttack(Attacker):
             # append to dists
             dists = torch.hstack((dists, cur_dists.detach().cpu().flatten()))
             adv_samples = torch.vstack((adv_samples, cur.detach().cpu()))
-        
+
         return dists, adv_samples

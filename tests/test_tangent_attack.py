@@ -55,7 +55,7 @@ class MultiDimInput(nn.Module):
 model2 = MultiDimInput()
 X2 = torch.ones((4, 3, 5, 5))
 X2[1] = -X2[1]
-X2[2] = 0.5 * X2[2]
+X2[2] = -0.5 * X2[2]
 X2[3] = 0.05 * X2[3]
 dists_target2 = model2.distance(X2)
 
@@ -64,14 +64,12 @@ class TestTangent:
     """test tangent attacker"""
 
     def test_boundary(self):
-        """verify that the bondary is indeed the desired boundary, within tolerance"""
+        """verify that the boundary is indeed the desired boundary, within tolerance"""
         # torch.manual_seed(seed)  # * for reproducibility
         attacker = TangentAttack(model, X, None, adv_batch_size=4, vmin=-5, vmax=5)
         y = attacker.get_decision(X)
         cur = attacker._initialize(X, None, y, None)
-        cur_dists = (
-            (cur - X).view(4, -1).norm(p=2, dim=-1, keepdim=True)
-        )
+        cur_dists = (cur - X).view(4, -1).norm(p=2, dim=-1, keepdim=True)
         deltas = attacker._select_delta(1, cur_dists)
         normal_vecs = attacker._estimate_normal_direction(cur, y, 5000, deltas)
 
@@ -89,7 +87,16 @@ class TestTangent:
 
     def test_dist2(self):
         torch.manual_seed(400)
-        attacker = TangentAttack(model2, X2, None, adv_batch_size=4, vmin=-0.5, vmax=0.5, T=200)
+        attacker = TangentAttack(
+            model2,
+            X2,
+            None,
+            adv_batch_size=4,
+            vmin=-1,
+            vmax=1,
+            perturb_vmin=-0.6,
+            perturb_vmax=0.6,
+        )
         dists, X_adv = attacker.attack()
 
         assert (dists / dists_target2 - 1).abs().max() < 0.05

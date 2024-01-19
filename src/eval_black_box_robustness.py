@@ -70,6 +70,8 @@ parser.add_argument('--T', default=40, type=int, help='max iterations for attack
 parser.add_argument('--tol', default=1e-5, type=float, help='the threshold to stop binary search')
 parser.add_argument('--vmin', default=0, type=float, help='the min value of the adversarial guess range')
 parser.add_argument('--vmax', default=1, type=float, help='the max value of the adversarial guess range')
+parser.add_argument('--perturb-vmax', default=0.5, type=float, help='the perturbation range for high dimension adversarial sample discovery')
+parser.add_argument('--perturb-vmin', default=-0.5, type=float, help='the pertrubation range for high dimension adversarial sample discovery')
 parser.add_argument('--no-shuffle', default=False, action='store_true', help='true to turn off data shuffling in evaluation sampling')
 
 args = parser.parse_args()
