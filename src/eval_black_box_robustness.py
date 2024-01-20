@@ -44,7 +44,10 @@ parser.add_argument('--sample-size', default=None, type=float,
 parser.add_argument("--m", default=None, type=int, help='vol element specific: keep the top m singular values to regularize only')
 parser.add_argument("--epochs", default=1200, type=int, help='the number of epochs for training')
 parser.add_argument('--burnin', default=600, type=int, help='the period before which no regularization is imposed')
-parser.add_argument('--reg-freq', default=5, type=int, help='the freqency of imposing regularizations')
+parser.add_argument('--reg-freq', default=5, type=int, help='the frequency of imposing regularizations')
+parser.add_argument('--reg-freq-update', default=None, type=int,
+                    help='the frequency of imposing regularization per parameter update: None means reg every epoch only'
+                    )
 parser.add_argument('--max-layer', default=None, type=int, 
     help='the number of max layers to pull information from. None means the entire feature map')
 

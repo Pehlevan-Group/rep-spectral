@@ -1,4 +1,11 @@
-"""train regularized ResNet model"""
+"""
+train regularized ResNet model
+
+in ResNet model, getting the singular values of convolution layer is expensive.
+We no longer regularize on a per parameter update basis but regularize every $k$
+number of parameter updates, where $k$ is a tunable parameter under `args.reg_freq_update`
+Alternatively, we can regularize only after every epoch as well, using `args.reg_freq`
+"""
 
 # load packages
 import os 
@@ -39,7 +46,10 @@ parser.add_argument('--lam', default=1e-4, type=float, help='the multiplier / st
 parser.add_argument('--reg', default='None', type=str, help='the type of regularization')
 parser.add_argument("--epochs", default=200, type=int, help='the number of epochs for training')
 parser.add_argument('--burnin', default=180, type=int, help='the period before which no regularization is imposed')
-parser.add_argument('--reg-freq', default=1, type=int, help='the freqency of imposing regularizations')
+parser.add_argument('--reg-freq', default=1, type=int, help='the frequency of imposing regularizations')
+parser.add_argument('--reg-freq-update', default=None, type=int, 
+                    help='the frequency of imposing regularization per parameter update: None means reg every epoch only'
+                    )
 
 # # iterative singular 
 parser.add_argument('--iterative', action='store_true', default=False, help='True to turn on iterative method')
@@ -60,6 +70,10 @@ torch.manual_seed(args.seed)
 # read paths
 paths = load_config(args.tag)
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+# parameter compatibility check
+if args.reg_freq_update is not None: 
+    assert args.reg_freq == 1, f"reg_freq_update{args.reg_freq_update} & reg_freq{args.reg_freq} not compatible"
 
 # set up summary writer
 log_name, base_log_name = get_logging_name(args, 'conv')
@@ -90,6 +104,19 @@ model = eval(f"ResNet{args.model}")(nl=nl).to(device)
 # get optimizer
 opt = getattr(optim, args.opt)(model.parameters(), lr=args.lr, weight_decay=args.wd, momentum=args.mom)
 
+def get_reg_loss(model: nn.Module) -> torch.Tensor:
+    """
+    compute regularization loss
+    
+    :return None if no regularization imposed
+    """
+    reg_loss = None
+    if args.reg == 'eig-ub':
+        reg_loss = top_eig_ub_regularizer_conv(model)
+    elif args.reg == 'spectral':
+        reg_loss = spectral_ub_regularizer_conv(model)
+    return reg_loss
+
 def train():
     """train a model with/without regularization"""
     loss_fn = nn.CrossEntropyLoss()
@@ -118,7 +145,7 @@ def train():
     for i in pbar:
         model.train()
         total_train_loss, total_train_acc = 0, 0
-        for X_train, y_train in train_loader:
+        for param_update_count, (X_train, y_train) in enumerate(train_loader):
             X_train, y_train = X_train.to(device), y_train.to(device)
             opt.zero_grad()
             y_pred_logits = model(X_train)
@@ -128,6 +155,12 @@ def train():
             total_train_loss += train_loss * len(X_train)
             total_train_acc += y_pred_logits.argmax(dim=-1).eq(y_train).sum()
 
+            # regularization on a per parameter update basis
+            if (args.reg_freq_update is not None) and (param_update_count % args.reg_freq_update == 0):
+                reg_loss = get_reg_loss(model)
+                if reg_loss is not None:
+                    train_loss += args.lam * reg_loss
+
             # step
             train_loss.backward()
             opt.step()
@@ -135,14 +168,9 @@ def train():
         train_loss = total_train_loss / len(train_set)
         train_acc = total_train_acc / len(train_set)
 
-        # * add regularization (after each epoch)
-        # TODO: tested a separate loop
-        if i > args.burnin and i % args.reg_freq == 0:
-            reg_loss = None
-            if args.reg == 'eig-ub':
-                reg_loss = top_eig_ub_regularizer_conv(model)
-            elif args.reg == 'spectral':
-                reg_loss = spectral_ub_regularizer_conv(model)
+        # regularization after each epoch, if not updated on a per parameter update basis
+        if (i > args.burnin) and (args.reg_freq_update is not None) and (i % args.reg_freq == 0):
+            reg_loss = get_reg_loss(model)
 
             if reg_loss is not None:
                 opt.zero_grad()
