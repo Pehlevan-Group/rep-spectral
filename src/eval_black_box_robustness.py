@@ -63,12 +63,15 @@ parser.add_argument('--scanbatchsize', default=20, type=int, help='the number of
 # ========= evaluation arguments =======
 parser.add_argument('--eval-epoch', default=200, type=int, help='the epoch of model to be evaluated at')
 parser.add_argument('--target', default=None, type=int, help='the target adversarial class')
+parser.add_argument('--adv-batch-size', default=16, type=int, help='the number of samples to be batched evaluated at a time')
 parser.add_argument('--eval-sample-size', default=2000, type=int, help='the number of samples to be evaluated')
 parser.add_argument('--attacker', default='TangentAttack', type=str, help='the type of attack')
 parser.add_argument('--T', default=40, type=int, help='max iterations for attack')
 parser.add_argument('--tol', default=1e-5, type=float, help='the threshold to stop binary search')
 parser.add_argument('--vmin', default=0, type=float, help='the min value of the adversarial guess range')
 parser.add_argument('--vmax', default=1, type=float, help='the max value of the adversarial guess range')
+parser.add_argument('--perturb-vmax', default=0.5, type=float, help='the perturbation range for high dimension adversarial sample discovery')
+parser.add_argument('--perturb-vmin', default=-0.5, type=float, help='the pertrubation range for high dimension adversarial sample discovery')
 parser.add_argument('--no-shuffle', default=False, action='store_true', help='true to turn off data shuffling in evaluation sampling')
 
 args = parser.parse_args()
@@ -111,7 +114,7 @@ def load_data():
         train_set, test_set = CustomDataset(X_train, y_train), CustomDataset(X_train, y_train) # repeat
     elif args.data == 'xor_noisy':
         from data import load_xor_noisy, CustomDataset
-        X_train, X_test, y_train, y_test = load_xor_noisy(args.step, 0.3, args.seed) # * tune std here
+        X_train, X_test, y_train, y_test = load_xor_noisy(args.step, 0.2, args.seed) # * tune std here
         train_set, test_set = CustomDataset(X_train, y_train), CustomDataset(X_train, y_train) # repeat
     elif args.data == "cifar10":
         from data import cifar10
@@ -153,6 +156,7 @@ model.load_state_dict(
         os.path.join(paths['model_dir'], base_log_name if args.reg == "None" else log_name, f'model_e{args.eval_epoch}.pt'
     ), map_location=device)
 )
+model.eval()
 
 # get attacker
 def get_attacker():
@@ -203,26 +207,15 @@ def attack_all(samples: torch.Tensor, target_samples: torch.Tensor) -> List[floa
     :param target_samples: batch samples of target class
     :param return l2 adversarial distance
     """
-    dists = []
-    for sample in tqdm(samples):
-        # keep first dimension the batch dimension
-        sample = sample.unsqueeze(dim=0).to(device)
-        
-        # targeted: draw a random one 
-        if target_samples is not None:
-            target_sample = target_samples[torch.randperm(len(target_samples))[[1]]]
-            target_sample = target_sample.to(device)
-        # untargeted
-        else:
-            target_sample = None
-            
-        attacker = Attacker(model, sample, target_sample, args.tol, vmin=args.vmin, vmax=args.vmax, T=args.T)
-        perturbed_sample = attacker.attack()
-
-        # get distance
-        dists.append((perturbed_sample - sample).norm(p=2).item())
-    
-    return dists
+    attacker = Attacker(
+        model, samples, target_samples, 
+        args.adv_batch_size,
+        args.tol, 
+        vmin=args.vmin, vmax=args.vmax, T=args.T,
+        device=device
+    )
+    dists, _ = attacker.attack()
+    return dists.tolist()
 
 def record(dists: List[float]):
     """dump computed distance to files"""

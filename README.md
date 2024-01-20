@@ -12,11 +12,18 @@ python -m venv ./venv
 source ./venv/bin/activate
 
 # install necessary packages
-pip3 install numpy pandas scikit-learn matplotlib toml ffmpeg
+pip3 install numpy pandas scikit-learn matplotlib toml ffmpeg pytest
 
 # install pytorch that is compatible with local build (check out https://pytorch.org)
 pip3 install torch torchvision torchaudio
 pip3 install tensorboard
+```
+
+To run unit tests, at root, do the following:
+
+```bash
+cd tests/
+pytest .
 ```
 
 ## Attempt 1: feature map regularization
