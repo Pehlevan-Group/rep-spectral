@@ -43,6 +43,9 @@ parser.add_argument("--opt", default='SGD', type=str, help='the type of optimize
 parser.add_argument("--wd", default=0, type=float, help='weight decay')
 parser.add_argument('--mom', default=0.9, type=float, help='the momentum')
 parser.add_argument('--lam', default=1e-4, type=float, help='the multiplier / strength of regularization')
+parser.add_argument("--max-layer", default=None, type=int, 
+                    help='the number of layers to regularize in ResNet architecture; None to regularize all'
+                    )
 parser.add_argument('--reg', default='None', type=str, help='the type of regularization')
 parser.add_argument("--epochs", default=200, type=int, help='the number of epochs for training')
 parser.add_argument('--burnin', default=180, type=int, help='the period before which no regularization is imposed')
@@ -112,7 +115,12 @@ def get_reg_loss(model: nn.Module) -> torch.Tensor:
     """
     reg_loss = None
     if args.reg == 'eig-ub':
-        reg_loss = top_eig_ub_regularizer_conv(model)
+        # parse max_layer argument
+        if args.max_layer is None: 
+            max_layer = 4 # total number of layers in any ResNet architectures
+        else:
+            max_layer = args.max_layer
+        reg_loss = top_eig_ub_regularizer_conv(model, max_layer=max_layer)
     elif args.reg == 'spectral':
         reg_loss = spectral_ub_regularizer_conv(model)
     return reg_loss
