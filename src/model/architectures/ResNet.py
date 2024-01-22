@@ -228,7 +228,8 @@ class ResNet(nn.Module):
         )
         self.bn1 = nn.BatchNorm2d(64)
 
-        self.get_eigvals_funcs = (
+        self.num_blocks = num_blocks # * for truncating regularization
+        self._get_eigvals_funcs = (
             []
         )  # * store get eigenvalue functions binding to the instances
         self.layer1 = self._make_layer(block, 64, num_blocks[0], stride=1)
@@ -261,7 +262,7 @@ class ResNet(nn.Module):
             self.in_planes = planes * block._expansion
 
             # add eigen binding function
-            self.get_eigvals_funcs.append(cur_layer.get_conv_layer_eigvals)
+            self._get_eigvals_funcs.append(cur_layer.get_conv_layer_eigvals)
 
         return nn.Sequential(*layers)
 
@@ -271,9 +272,14 @@ class ResNet(nn.Module):
         return out
 
     # --------- for conv layer eigenvalues ----------
-    def get_conv_layer_eigvals(self) -> List[torch.Tensor]:
+    def get_conv_layer_eigvals(self, max_layer: int=4) -> List[torch.Tensor]:
+        """get convolution layer regularization up to and including `max_layer`"""
+        assert max_layer in [1, 2, 3, 4], f"max_layer {max_layer} not in [1, 2, 3, 4]"
+        num_conv_layers = sum(self.num_blocks[:max_layer])
         result_list = []
-        for func in self.get_eigvals_funcs:
+
+        # get eigvals up to truncated number of convolution layers
+        for func in self._get_eigvals_funcs[:num_conv_layers]:
             result_list += func()
         return result_list
 
