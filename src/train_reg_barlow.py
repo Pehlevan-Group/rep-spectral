@@ -98,11 +98,29 @@ def load_data():
 
 train_set, unaugmented_train_dataset, test_set = load_data()
 
-# batch to dataloader 
+# batch to dataloader # TODO: test optimal batch size for feeding 
 train_loader = DataLoader(train_set, batch_size=args.batch_size, shuffle=True, drop_last=True)
-unaug_loader = DataLoader(unaugmented_train_dataset, batch_size=args.batch_size, shuffle=False, drop_last=False)
-test_loader = DataLoader(test_set, batch_size=args.batch_size, shuffle=False, drop_last=False)
+unaug_loader = DataLoader(
+    unaugmented_train_dataset, 
+    batch_size=args.batch_size, 
+    shuffle=False, drop_last=False
+)
+test_loader = DataLoader(
+    test_set, 
+    batch_size=args.batch_size, 
+    shuffle=False, drop_last=False
+)
 print(f"{args.data} data loaded")
+
+# store train and test labels
+train_labels, test_labels = [], []
+for _, labels in unaug_loader:
+    train_labels.append(labels)
+for _, labels in test_loader: 
+    test_labels.append(labels)
+
+train_labels = torch.concat(train_labels, dim=0)
+test_labels = torch.concat(test_labels, dim=0)
 
 # get model
 nl = getattr(nn, args.nl)()
@@ -132,8 +150,6 @@ def get_reg_loss(model: nn.Module) -> torch.Tensor:
 
 def train():
     """train a model with/without regularization"""
-    loss_fn = nn.CrossEntropyLoss()
-    
     # initialize 
     if args.reg == 'None':
         pbar = tqdm(range(args.epochs + 1)) 
@@ -195,7 +211,7 @@ def train():
             with torch.no_grad():
                 # get acc 
                 downstream_train_acc, downstream_test_acc = get_contrastive_acc(
-                    model, unaug_loader, test_loader, 
+                    model, unaug_loader, train_labels, test_loader, test_labels,
                     device=device, random_state=args.seed
                 )
         

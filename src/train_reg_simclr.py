@@ -103,6 +103,16 @@ unaug_loader = DataLoader(unaugmented_train_dataset, batch_size=args.batch_size,
 test_loader = DataLoader(test_set, batch_size=args.batch_size, shuffle=False, drop_last=False)
 print(f"{args.data} data loaded")
 
+# store train and test labels
+train_labels, test_labels = [], []
+for _, labels in unaug_loader:
+    train_labels.append(labels)
+for _, labels in test_loader:
+    test_labels.append(labels)
+
+train_labels = torch.concat(train_labels, dim=0)
+test_labels = torch.concat(test_labels, dim=0)
+
 # get model
 nl = getattr(nn, args.nl)()
 backbone = eval(f"ResNet{args.model}")(nl=nl).to(device)
@@ -206,7 +216,7 @@ def train():
             with torch.no_grad():
                 # get acc 
                 downstream_train_acc, downstream_test_acc = get_contrastive_acc(
-                    model, unaug_loader, test_loader, 
+                    model, unaug_loader, train_labels, test_loader, test_labels,
                     device=device, random_state=args.seed
                 )
         

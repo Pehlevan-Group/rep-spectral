@@ -12,7 +12,9 @@ import torch.nn as nn
 def get_contrastive_acc(
     model: nn.Module,
     train_loader: torch.utils.data.DataLoader,
+    train_labels: torch.Tensor,
     test_loader: torch.utils.data.DataLoader,
+    test_labels: torch.Tensor,
     device="cpu",
     random_state=None,
 ) -> Tuple[float]:
@@ -20,30 +22,29 @@ def get_contrastive_acc(
     a helper function that evaluates downstream acc
 
     :param model: a contrastive model
-    :param dataloader: train and test
+    :param dataloader: train and test, for obtaining feature representations
+    :param labels: the labels of train test samples
     :parma random_state: the random seed
     """
     # get train feature representations
-    train_features, train_labels = [], []
+    train_features = []
     with torch.no_grad():
         for X, labels in train_loader:
             X = X.to(device)
             train_features.append(model.feature_map(X).detach().cpu().numpy())
-            train_labels.append(labels.detach().cpu().numpy())
 
     train_features = np.vstack(train_features)
-    train_labels = np.hstack(train_labels)
+    train_labels = train_labels.detach().cpu().numpy()
 
     # get test feature representation
-    test_features, test_labels = [], []
+    test_features = []
     with torch.no_grad():
         for X, labels in test_loader:
             X = X.to(device)
             test_features.append(model.feature_map(X).detach().cpu().numpy())
-            test_labels.append(labels.detach().cpu().numpy())
 
     test_features = np.vstack(test_features)
-    test_labels = np.hstack(test_labels)
+    test_labels = test_labels.detach().cpu().numpy()
 
     lr = LogisticRegression(
         solver="lbfgs", n_jobs=-1, random_state=random_state
