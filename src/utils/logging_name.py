@@ -67,7 +67,7 @@ def get_logging_name(args, mode: str) -> List[str]:
         )
 
     # ================ contrastive ====================
-    elif mode == 'Barlow':
+    elif mode == 'barlow':
         base_log_name = (
             f"{args.data}_barlow_m{args.model}_p{args.projector}_l{args.lambd}_bs{args.batch_size}_lr{args.lr}_opt{args.opt}_wd{args.wd}"
             + f"_mom{args.mom}_nl{args.nl}_regNone_e{args.epochs}_seed{args.seed}"
