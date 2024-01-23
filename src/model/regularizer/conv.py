@@ -7,7 +7,7 @@ import torch
 import torch.nn as nn
 
 
-def top_eig_ub_regularizer_conv(model: nn.Module, max_layer: int=4) -> torch.Tensor:
+def top_eig_ub_regularizer_conv(model: nn.Module, max_layer: int = 4) -> torch.Tensor:
     """
     regularize up to feature map
     :param max_layer: the maximum layers in ResNet to regularize

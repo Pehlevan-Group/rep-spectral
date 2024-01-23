@@ -228,7 +228,7 @@ class ResNet(nn.Module):
         )
         self.bn1 = nn.BatchNorm2d(64)
 
-        self.num_blocks = num_blocks # * for truncating regularization
+        self.num_blocks = num_blocks  # * for truncating regularization
         self._get_eigvals_funcs = (
             []
         )  # * store get eigenvalue functions binding to the instances
@@ -272,7 +272,7 @@ class ResNet(nn.Module):
         return out
 
     # --------- for conv layer eigenvalues ----------
-    def get_conv_layer_eigvals(self, max_layer: int=4) -> List[torch.Tensor]:
+    def get_conv_layer_eigvals(self, max_layer: int = 4) -> List[torch.Tensor]:
         """get convolution layer regularization up to and including `max_layer`"""
         assert max_layer in [1, 2, 3, 4], f"max_layer {max_layer} not in [1, 2, 3, 4]"
         num_conv_layers = sum(self.num_blocks[:max_layer])
