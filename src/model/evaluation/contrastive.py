@@ -44,7 +44,6 @@ def get_contrastive_acc(
 
     test_features = np.vstack(test_features)
     test_labels = np.hstack(test_labels)
-    print("all gathered")
 
     lr = LogisticRegression(
         solver="lbfgs", n_jobs=-1, random_state=random_state
