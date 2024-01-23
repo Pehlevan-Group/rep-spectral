@@ -102,12 +102,12 @@ train_set, unaugmented_train_dataset, test_set = load_data()
 train_loader = DataLoader(train_set, batch_size=args.batch_size, shuffle=True, drop_last=True)
 unaug_loader = DataLoader(
     unaugmented_train_dataset, 
-    batch_size=args.batch_size, 
+    batch_size=args.batch_size * 4, # * testing
     shuffle=False, drop_last=False
 )
 test_loader = DataLoader(
     test_set, 
-    batch_size=args.batch_size, 
+    batch_size=args.batch_size * 4, # * testing 
     shuffle=False, drop_last=False
 )
 print(f"{args.data} data loaded")
