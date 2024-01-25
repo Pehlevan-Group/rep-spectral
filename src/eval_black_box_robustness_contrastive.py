@@ -141,7 +141,7 @@ def load_model():
     model_base.eval()
 
     # wrap feature map + logistic into an nn module 
-    model = ContrastiveWrap(model_base, train_loader)
+    model = ContrastiveWrap(model_base, train_loader, device=device, random_state=args.seed)
     model = model.to(device)
     return model 
 
