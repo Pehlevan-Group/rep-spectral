@@ -110,7 +110,7 @@ def get_simclr_pipeline_transform(size, s=1):
 
 # ============ Barlow =============
 
-BARLOW_NORMLIZATION = transforms.Normalize(
+BARLOW_NORMALIZATION = transforms.Normalize(
     mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]
 )
 
@@ -156,7 +156,7 @@ class Transform:
                 GaussianBlurBarlow(p=1.0),
                 Solarization(p=0.0),
                 transforms.ToTensor(),
-                BARLOW_NORMLIZATION,
+                BARLOW_NORMALIZATION,
             ]
         )
         self.transform_prime = transforms.Compose(
@@ -175,7 +175,7 @@ class Transform:
                 GaussianBlurBarlow(p=0.1),
                 Solarization(p=0.2),
                 transforms.ToTensor(),
-                BARLOW_NORMLIZATION,
+                BARLOW_NORMALIZATION,
             ]
         )
 
@@ -202,7 +202,7 @@ def cifar10_contrastive(data_path: str, transformation: str = "SimClr"):
     elif transformation == "Barlow":
         train_transformation = Transform()
         test_transformation = transforms.Compose(
-            [transforms.ToTensor(), BARLOW_NORMLIZATION]
+            [transforms.ToTensor(), BARLOW_NORMALIZATION]
         )
     else:
         raise NotImplementedError(
