@@ -36,7 +36,7 @@ def _get_feature_representations_and_label(
         labels.append(y.detach().cpu().numpy())
     features = np.vstack(features)
     labels = np.hstack(labels)
-    return features
+    return features, labels
 
 
 def _train_downstream_logistic_regression(
@@ -89,13 +89,13 @@ def get_contrastive_acc(
 class LogisticRegressionTorch(nn.Module):
     """wrap trained logistic regression to a torch module"""
 
-    def __init__(self, lr_model: LogisticRegression):
+    def __init__(self, lr_model: LogisticRegression, device='cpu'):
         """
         :param lr_model: a model after being fitted
         """
         super().__init__()
-        self.coefs = lr_model.coef_
-        self.intercept = lr_model.intercept_
+        self.coefs = torch.tensor(lr_model.coef_).to(torch.float32).to(device)
+        self.intercept = torch.tensor(lr_model.intercept_).to(torch.float32).to(device)
         self.softmax = nn.Softmax(dim=-1)
 
     @torch.no_grad()
@@ -139,7 +139,7 @@ class ContrastiveWrap(nn.Module):
 
         # transfer end to end map: feature map + logistic
         self.transfer_e2e_map = nn.Sequential(
-            contrastive_model.feature_map, LogisticRegressionTorch(lr)
+            contrastive_model.feature_map, LogisticRegressionTorch(lr, device=device)
         )
 
     @torch.no_grad()
