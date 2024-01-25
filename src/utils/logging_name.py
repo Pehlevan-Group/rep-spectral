@@ -51,6 +51,7 @@ def get_logging_name(args, mode: str) -> List[str]:
             f"{args.data}_step{args.step}_ts{args.test_size}_w{args.hidden_dim}_bs{args.batch_size}"
             + f"_lr{args.lr}_opt{args.opt}_wd{args.wd}_mom{args.mom}_nl{args.nl}_regNone"
             + f"_e{args.epochs}_seed{args.seed}"
+            + (f"_ru{args.reg_freq_update}" if args.reg_freq_update is not None else "")
         )
 
     elif mode == "conv":
@@ -67,7 +68,7 @@ def get_logging_name(args, mode: str) -> List[str]:
         )
 
     # ================ contrastive ====================
-    elif mode == 'barlow':
+    elif mode == "barlow":
         base_log_name = (
             f"{args.data}_barlow_m{args.model}_p{args.projector}_l{args.lambd}_bs{args.batch_size}_lr{args.lr}_opt{args.opt}_wd{args.wd}"
             + f"_mom{args.mom}_nl{args.nl}_regNone_e{args.epochs}_seed{args.seed}"
@@ -79,8 +80,8 @@ def get_logging_name(args, mode: str) -> List[str]:
             + (f"_ru{args.reg_freq_update}" if args.reg_freq_update is not None else "")
             + (f"_ml{args.max_layer}" if args.max_layer is not None else "")
         )
-    
-    elif mode == 'simclr':
+
+    elif mode == "simclr":
         base_log_name = (
             f"{args.data}_simclr_m{args.model}_tem{args.temperature}_bs{args.batch_size}_lr{args.lr}_opt{args.opt}_wd{args.wd}"
             + f"_mom{args.mom}_nl{args.nl}_regNone_e{args.epochs}_seed{args.seed}"
