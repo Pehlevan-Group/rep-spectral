@@ -46,12 +46,12 @@ def get_logging_name(args, mode: str) -> List[str]:
             f"{args.data}_step{args.step}_ts{args.test_size}_w{args.hidden_dim}_bs{args.batch_size}"
             + f"_lr{args.lr}_opt{args.opt}_wd{args.wd}_mom{args.mom}_nl{args.nl}_lam{args.lam}_reg{reg_name}"
             + f"_ss{args.sample_size}_e{args.epochs}_b{args.burnin}_seed{args.seed}_rf{args.reg_freq}"
+            + (f"_ru{args.reg_freq_update}" if args.reg_freq_update is not None else "")
         )
         base_log_name = (
             f"{args.data}_step{args.step}_ts{args.test_size}_w{args.hidden_dim}_bs{args.batch_size}"
             + f"_lr{args.lr}_opt{args.opt}_wd{args.wd}_mom{args.mom}_nl{args.nl}_regNone"
             + f"_e{args.epochs}_seed{args.seed}"
-            + (f"_ru{args.reg_freq_update}" if args.reg_freq_update is not None else "")
         )
 
     elif mode == "conv":
