@@ -58,7 +58,10 @@ parser.add_argument("--epochs", default=1200, type=int, help='the number of epoc
 parser.add_argument('--burnin', default=600, type=int, help='the period before which no regularization is imposed')
 parser.add_argument('--max-layer', default=None, type=int,
                     help='the number of max layers to pull information from. None means the entire feature map')
-parser.add_argument('--reg-freq', default=5, type=int, help='the freqency of imposing regularizations')
+parser.add_argument('--reg-freq', default=5, type=int, help='the frequency of imposing regularizations')
+parser.add_argument('--reg-freq-update', default=None, type=int,
+                    help='the frequency of imposing regularization per parameter update: None means reg every epoch only'
+                    )
 
 # iterative singular 
 parser.add_argument('--iterative', action='store_true', default=False, help='True to turn on iterative method')
@@ -157,7 +160,7 @@ def train():
     for i in pbar:
         model.train()
         total_train_loss, total_train_acc = 0, 0
-        for X_train, y_train in train_loader:
+        for parameter_update_count, (X_train, y_train) in enumerate(train_loader):
             X_train, y_train = X_train.to(device), y_train.to(device)
             opt.zero_grad()
             y_pred_logits = model(X_train)
@@ -168,7 +171,10 @@ def train():
             total_train_acc += y_pred_logits.argmax(dim=-1).eq(y_train).sum()
 
             # add regularization
-            if i > args.burnin and i % args.reg_freq == 0:
+            if i > args.burnin and i % args.reg_freq == 0 and (
+                (args.reg_freq_update is not None)
+                and parameter_update_count % args.reg_freq_update == 0
+            ):
                 reg_loss = 0
                 if args.reg == 'cross-lip':
                     reg_loss = cross_lipschitz_regulerizer(
