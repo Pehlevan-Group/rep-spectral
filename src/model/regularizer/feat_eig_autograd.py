@@ -131,7 +131,6 @@ def top_eig_ub_regularizer_autograd(
 
 
 def top_eig_ub_pure_regularizer_autograd(
-    x: torch.Tensor,
     feature_map: nn.Module,
     max_layer: int = None,
     iterative=True,
@@ -178,9 +177,6 @@ def top_eig_ub_pure_regularizer_autograd(
 
         if max_layer is not None and counter == max_layer:
             break
-
-        # update to next layer
-        x = layer(x)
 
     # compute regularization
     reg_term = sum(eigs)

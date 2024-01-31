@@ -173,8 +173,9 @@ def train():
 
             # add regularization
             if i > args.burnin and i % args.reg_freq == 0 and (
-                (args.reg_freq_update is not None)
-                and parameter_update_count % args.reg_freq_update == 0
+                (args.reg_freq_update is not None
+                and parameter_update_count % args.reg_freq_update == 0) # anything else
+                or (args.reg_freq_update is None) # reg_freq_update=1
             ):
                 reg_loss = 0
                 if args.reg == 'cross-lip':
@@ -193,7 +194,7 @@ def train():
                     )
                 elif args.reg == 'eig-ub-pure':
                     reg_loss = top_eig_ub_pure_regularizer_autograd(
-                        X_train, model.feature_map,
+                        model.feature_map,
                         max_layer=args.max_layer,
                         iterative=args.iterative, v_init=v_init, tol=args.tol, max_update=args.max_update
                     )
