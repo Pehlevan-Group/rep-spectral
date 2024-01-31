@@ -28,6 +28,7 @@ from model import (
     # volume_element_regularizer_autograd, 
     top_eig_regularizer_autograd,
     top_eig_ub_regularizer_autograd,
+    top_eig_ub_pure_regularizer_autograd,
     spectral_ub_regularizer_autograd
 )
 from utils import load_config, get_logging_name
@@ -147,7 +148,7 @@ def train():
     if args.iterative:
         if args.reg == 'spectral':
             v_init = init_model_right_singular(model.model, tol=args.tol)
-        elif args.reg == 'eig-ub':
+        elif args.reg == 'eig-ub' or args.reg == 'eig-ub-pure':
             v_init = init_model_right_singular(
                 model.feature_map if hasattr(model, 'feature_map') else model.feature_maps[-1],
                 tol=args.tol
@@ -186,6 +187,12 @@ def train():
                     )
                 elif args.reg == 'eig-ub':
                     reg_loss = top_eig_ub_regularizer_autograd(
+                        X_train, model.feature_map,
+                        max_layer=args.max_layer,
+                        iterative=args.iterative, v_init=v_init, tol=args.tol, max_update=args.max_update
+                    )
+                elif args.reg == 'eig-ub-pure':
+                    reg_loss = top_eig_ub_pure_regularizer_autograd(
                         X_train, model.feature_map,
                         max_layer=args.max_layer,
                         iterative=args.iterative, v_init=v_init, tol=args.tol, max_update=args.max_update

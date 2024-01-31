@@ -89,7 +89,7 @@ def get_contrastive_acc(
 class LogisticRegressionTorch(nn.Module):
     """wrap trained logistic regression to a torch module"""
 
-    def __init__(self, lr_model: LogisticRegression, device='cpu'):
+    def __init__(self, lr_model: LogisticRegression, device="cpu"):
         """
         :param lr_model: a model after being fitted
         """

@@ -130,6 +130,64 @@ def top_eig_ub_regularizer_autograd(
     return reg_term
 
 
+def top_eig_ub_pure_regularizer_autograd(
+    x: torch.Tensor,
+    feature_map: nn.Module,
+    max_layer: int = None,
+    iterative=True,
+    v_init=None,
+    max_update: int = 2,
+    tol=1e-6,
+):
+    """
+    give upper bound of the previous quantity
+    only for linear MLP (activation pattern removed)
+
+    :param max_layer: the max number of layers to pull information from and regularize
+        None means pulling from all
+    :param iterative: True to us exact eigen-decomposition, False to use power iteration
+    :param v_init: the initialization of top right singular vector
+    :param max_update: the maximum number of updates to find the new singular vectors
+    :param tol: the tolerance for convergence stopping criterion
+
+    :return the regularization term
+    """
+    # sequential passing in
+    eigs = []
+    counter = 0  # count current linear layers encountered
+    for layer in feature_map:
+        # a linear layer
+        if isinstance(layer, nn.Linear):
+            W = layer.weight
+            if iterative:
+                v_new = iterative_top_right_singular_vector(
+                    W, v_init[layer], tol=tol, max_update=max_update
+                )
+
+                # compute eigenvalue for backprop
+                temp = W @ v_new
+                eig = temp.T @ temp
+                eig = eig[0][0]
+
+                # update singular values
+                v_init[layer] = v_new
+            else:
+                eig = torch.linalg.eigvalsh(W.T @ W).max()
+            eigs.append(eig)
+            counter += 1
+
+        if max_layer is not None and counter == max_layer:
+            break
+
+        # update to next layer
+        x = layer(x)
+
+    # compute regularization
+    reg_term = sum(eigs)
+
+    return reg_term
+
+
 # def volume_element_regularizer_autograd(x: torch.Tensor, feature_map: nn.Module, sample_size: float = None, m: int = None, scanbatchsize: int = 20):
 #     """
 #     autograd computation of volume element (using SVD)
