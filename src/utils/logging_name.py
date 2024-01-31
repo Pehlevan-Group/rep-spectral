@@ -18,7 +18,7 @@ def get_logging_name(args, mode: str) -> List[str]:
     """
     # modify reg name
     reg_name = args.reg
-    if reg_name in ["spectral", "eig-ub"] and args.iterative:
+    if reg_name in ["spectral", "eig-ub", "eig-ub-pure"] and args.iterative:
         reg_name += "-iterative"
     elif reg_name == "vol":
         reg_name += f"_m{args.m}"
