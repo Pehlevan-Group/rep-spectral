@@ -417,7 +417,7 @@ class indoor(data.Dataset):
     def __getitem__(self, idx):
         ImageFile.LOAD_TRUNCATED_IMAGES = True
         image_name = self.split[idx]
-        image_path = join(self.root, "images", image_name)
+        image_path = join(self.root, "Images", image_name)
         image = Image.open(image_path).convert("RGB")
         target_class = self.class_name_map[image_name.split("/")[0]]
 
@@ -434,14 +434,14 @@ class indoor(data.Dataset):
         import tarfile
 
         if (
-            os.path.exists(join(self.root, "images"))
+            os.path.exists(join(self.root, "Images"))
             and os.path.exists(join(self.root, "TrainImages.txt"))
             and os.path.exists(join(self.root, "TestImages.txt"))
         ):
-            if len(os.listdir(join(self.root, "images"))) == 67:
+            if len(os.listdir(join(self.root, "Images"))) == 67:
                 print("Files already downloaded and verified")
                 # populate class
-                class_names = sorted(os.listdir(join(self.root, "images")))
+                class_names = sorted(os.listdir(join(self.root, "Images")))
                 self.class_name_map = dict(
                     zip(class_names, list(range(len(class_names))))
                 )
@@ -456,7 +456,7 @@ class indoor(data.Dataset):
         os.remove(join(self.root, tar_filename))
 
         # populate class
-        class_names = sorted(os.listdir(join(self.root, "images")))
+        class_names = sorted(os.listdir(join(self.root, "Images")))
         self.class_name_map = dict(zip(class_names, list(range(len(class_names)))))
 
         # download splits
