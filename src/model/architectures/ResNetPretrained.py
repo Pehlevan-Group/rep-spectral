@@ -6,7 +6,7 @@ for transfer learning only: load and wrap pretrained model for regularizations
 """
 
 # load packages
-from typing import List
+from typing import List, Tuple
 import torch
 import torch.nn as nn
 from torchvision.models import resnet50, ResNet50_Weights
@@ -58,10 +58,11 @@ class ResNet50Pretrained(nn.Module):
         self._set_conv(model)
 
         # modify the linear head
-        model.fc = nn.Linear(model.fc.in_features, num_classes, bias=True)
+        self.fc = nn.Linear(model.fc.in_features, num_classes, bias=True)
         # unit initialization
-        nn.init.normal_(model.fc.weight, 0, 1)
-        nn.init.normal_(model.fc.bias, 0, 1)
+        nn.init.normal_(self.fc.weight, 0, 1)
+        nn.init.normal_(self.fc.bias, 0, 1)
+        model.fc = nn.Identity()  # for representation readouts
 
         # register model
         self.model = model
@@ -77,18 +78,15 @@ class ResNet50Pretrained(nn.Module):
         """
         move all trainable parameters in the pretrained model to buffer
         so that gradient would not flow to this static snapshot
-
-        the identification of the parameters is by the name of the parameter
-        as in the original model. No clashes will occur, since
-        parameters truly trainable will be under `self.model` in this case.
         """
         # read a snapshot
         snapshot = resnet50(weights=weights)
 
         # register all parameters as buffers
         for name, parameter in snapshot.named_parameters():
-            pt_name = self._get_pt_param_name(name)
-            self.register_buffer(pt_name, parameter, persistent=False)
+            if name != "fc.weight" and name != "fc.bias":
+                pt_name = self._get_pt_param_name(name)
+                self.register_buffer(pt_name, parameter, persistent=False)
 
     def _get_pre_layer_conv(self, model: resnet50) -> List[nn.Conv2d]:
         return [model.conv1]
@@ -184,8 +182,11 @@ class ResNet50Pretrained(nn.Module):
         ):
             conv_layer = Conv2dWrap(conv_layer)
 
-    def forward(self, x: torch.Tensor):
-        return self.model(x)
+    def forward(self, x: torch.Tensor) -> Tuple[torch.Tensor]:
+        """output both feature representations and logits"""
+        features = self.model(x)
+        logits = self.fc(features)
+        return features, logits
 
     # ----------------- for regularization only ---------------------
     def get_conv_layer_eigvals(self, max_layer: int = 4) -> List[torch.Tensor]:
@@ -215,8 +216,7 @@ class ResNet50Pretrained(nn.Module):
         """
         loss = 0
         for name, parameter in self.model.named_parameters():
-            if name != "fc.weight" and name != "fc.bias":  # exclude last linear head
-                pt_name = self._get_pt_param_name(name)
-                parameter_pretrained = getattr(self, pt_name)
-                loss += torch.sum((parameter - parameter_pretrained) ** 2)
+            pt_name = self._get_pt_param_name(name)
+            parameter_pretrained = getattr(self, pt_name)
+            loss += torch.sum((parameter - parameter_pretrained) ** 2)
         return loss
