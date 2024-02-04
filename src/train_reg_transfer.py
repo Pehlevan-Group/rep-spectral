@@ -104,11 +104,11 @@ train_set, test_set, num_classes = load_data()
 
 # batch to dataloader
 train_loader = DataLoader(train_set, batch_size=args.batch_size, shuffle=True)
-test_loader = DataLoader(test_set, batch_size=args.batch_size, shuffle=False)
+test_loader = DataLoader(test_set, batch_size=args.batch_size * 4, shuffle=False)
 print(f'{args.data} data loaded')
 
 # get model
-model = ResNet50Pretrained(num_classes)
+model = ResNet50Pretrained(num_classes).to(device)
 
 # get optimizer 
 # backbone parameters
@@ -155,7 +155,7 @@ def train():
     loss_fn = nn.CrossEntropyLoss()
 
     # initialize
-    if args.reg == 'None':
+    if "None" in args.reg:
         pbar = tqdm(range(args.epochs + 1))
     else:
         # start training from burnin
