@@ -204,7 +204,7 @@ def train():
         train_acc = total_train_acc / len(train_set)
 
         # regularization after each epoch, if not updated on a per parameter update basis
-        if (i > args.burnin) and (args.reg_freq_update is not None) and (i % args.reg_freq == 0):
+        if (i > args.burnin) and (args.reg_freq_update is None) and (i % args.reg_freq == 0):
             reg_loss = get_reg_loss(model, features) # * this only gets the last batch of features
 
             if reg_loss is not None:
