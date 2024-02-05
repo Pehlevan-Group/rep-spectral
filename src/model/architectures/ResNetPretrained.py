@@ -22,19 +22,19 @@ class Conv2dWrap(nn.Module):
     def __init__(self, conv: nn.Conv2d):
         super().__init__()
         conv.padding_mode = "circular"  # * change to circular
-        self.conv = conv
+        self.wrap = conv
         self._input_shapes = None
 
     def forward(self, x: torch.Tensor):
         # register buffer
         if self._input_shapes is None:
             self._input_shapes = (x.shape[-2], x.shape[-1])  # (h, w)
-        return self.conv(x)
+        return self.wrap(x)
 
     def _get_conv_layer_eigvals(self) -> torch.Tensor:
         """compute eigvals"""
-        kernel = self.conv.weight
-        stride = self.conv.stride[
+        kernel = self.wrap.weight
+        stride = self.wrap.stride[
             0
         ]  # * assume square stride, which is True for pretrained resnet 50
         h, w = self._input_shapes
@@ -285,7 +285,7 @@ class ResNet50Pretrained(nn.Module):
         """
         loss = 0
         for name, parameter in self.model.named_parameters():
-            pt_name = self._get_pt_param_name(name)
+            pt_name = self._get_pt_param_name(name).replace("wrap_", "")
             parameter_pretrained = getattr(self, pt_name)
             loss += torch.sum((parameter - parameter_pretrained) ** 2)
         return loss
