@@ -54,9 +54,6 @@ class ResNet50Pretrained(nn.Module):
         # load pretrained weights on ImageNet
         model = resnet50(weights=weights)
 
-        # modify to periodic wrapper
-        self._set_conv(model)
-
         # modify the linear head
         self.fc = nn.Linear(model.fc.in_features, num_classes, bias=True)
         # unit initialization
@@ -66,6 +63,9 @@ class ResNet50Pretrained(nn.Module):
 
         # register model
         self.model = model
+
+        # modify to periodic wrapper
+        self._set_conv()
 
         # get a pretrained snapshot as buffer (for computing TL regularization loss)
         self._register_snapshot(weights=weights)
@@ -88,99 +88,168 @@ class ResNet50Pretrained(nn.Module):
                 pt_name = self._get_pt_param_name(name)
                 self.register_buffer(pt_name, parameter, persistent=False)
 
-    def _get_pre_layer_conv(self, model: resnet50) -> List[nn.Conv2d]:
-        return [model.conv1]
+    def _get_pre_layer_conv(self) -> List[nn.Conv2d]:
+        return [self.model.conv1]
 
-    def _get_layer1_conv(self, model: resnet50) -> List[nn.Conv2d]:
-        # layer 1, 3 bottlenecks
+    def _set_pre_layer_conv(self):
+        self.model.conv1 = Conv2dWrap(self.model.conv1)
+
+    def _get_layer1_conv(self) -> List[nn.Conv2d]:
+        # layer 1 (3 bottlenecks)
         layer1_conv = [
-            model.layer1[0].conv1,
-            model.layer1[0].conv2,
-            model.layer1[0].conv3,
-            model.layer1[0].downsample[0],
-            model.layer1[1].conv1,
-            model.layer1[1].conv2,
-            model.layer1[1].conv3,
-            model.layer1[2].conv1,
-            model.layer1[2].conv2,
-            model.layer1[2].conv3,
+            self.model.layer1[0].conv1,
+            self.model.layer1[0].conv2,
+            self.model.layer1[0].conv3,
+            self.model.layer1[0].downsample[0],
+            self.model.layer1[1].conv1,
+            self.model.layer1[1].conv2,
+            self.model.layer1[1].conv3,
+            self.model.layer1[2].conv1,
+            self.model.layer1[2].conv2,
+            self.model.layer1[2].conv3,
         ]
         return layer1_conv
 
-    def _get_layer2_conv(self, model: resnet50) -> List[nn.Conv2d]:
+    def _set_layer1_conv(self):
+        """set layer1 conv layers to conv wrappers"""
+        self.model.layer1[0].conv1 = Conv2dWrap(self.model.layer1[0].conv1)
+        self.model.layer1[0].conv2 = Conv2dWrap(self.model.layer1[0].conv2)
+        self.model.layer1[0].conv3 = Conv2dWrap(self.model.layer1[0].conv3)
+        self.model.layer1[0].downsample[0] = Conv2dWrap(
+            self.model.layer1[0].downsample[0]
+        )
+        self.model.layer1[1].conv1 = Conv2dWrap(self.model.layer1[1].conv1)
+        self.model.layer1[1].conv2 = Conv2dWrap(self.model.layer1[1].conv2)
+        self.model.layer1[1].conv3 = Conv2dWrap(self.model.layer1[1].conv3)
+        self.model.layer1[2].conv1 = Conv2dWrap(self.model.layer1[2].conv1)
+        self.model.layer1[2].conv2 = Conv2dWrap(self.model.layer1[2].conv2)
+        self.model.layer1[2].conv3 = Conv2dWrap(self.model.layer1[2].conv3)
+
+    def _get_layer2_conv(self) -> List[nn.Conv2d]:
         # layer 2, 4 bottle necks
         layer2_conv = [
-            model.layer2[0].conv1,
-            model.layer2[0].conv2,
-            model.layer2[0].conv3,
-            model.layer2[0].downsample[0],
-            model.layer2[1].conv1,
-            model.layer2[1].conv2,
-            model.layer2[1].conv3,
-            model.layer2[2].conv1,
-            model.layer2[2].conv2,
-            model.layer2[2].conv3,
-            model.layer2[3].conv1,
-            model.layer2[3].conv2,
-            model.layer2[3].conv3,
+            self.model.layer2[0].conv1,
+            self.model.layer2[0].conv2,
+            self.model.layer2[0].conv3,
+            self.model.layer2[0].downsample[0],
+            self.model.layer2[1].conv1,
+            self.model.layer2[1].conv2,
+            self.model.layer2[1].conv3,
+            self.model.layer2[2].conv1,
+            self.model.layer2[2].conv2,
+            self.model.layer2[2].conv3,
+            self.model.layer2[3].conv1,
+            self.model.layer2[3].conv2,
+            self.model.layer2[3].conv3,
         ]
         return layer2_conv
 
-    def _get_layer3_conv(self, model: resnet50) -> List[nn.Conv2d]:
+    def _set_layer2_conv(self):
+        """set layer 2 conv to conv wrappers"""
+        self.model.layer2[0].conv1 = Conv2dWrap(self.model.layer2[0].conv1)
+        self.model.layer2[0].conv2 = Conv2dWrap(self.model.layer2[0].conv2)
+        self.model.layer2[0].conv3 = Conv2dWrap(self.model.layer2[0].conv3)
+        self.model.layer2[0].downsample[0] = Conv2dWrap(
+            self.model.layer2[0].downsample[0]
+        )
+        self.model.layer2[1].conv1 = Conv2dWrap(self.model.layer2[1].conv1)
+        self.model.layer2[1].conv2 = Conv2dWrap(self.model.layer2[1].conv2)
+        self.model.layer2[1].conv3 = Conv2dWrap(self.model.layer2[1].conv3)
+        self.model.layer2[2].conv1 = Conv2dWrap(self.model.layer2[2].conv1)
+        self.model.layer2[2].conv2 = Conv2dWrap(self.model.layer2[2].conv2)
+        self.model.layer2[2].conv3 = Conv2dWrap(self.model.layer2[2].conv3)
+        self.model.layer2[3].conv1 = Conv2dWrap(self.model.layer2[3].conv1)
+        self.model.layer2[3].conv2 = Conv2dWrap(self.model.layer2[3].conv2)
+        self.model.layer2[3].conv3 = Conv2dWrap(self.model.layer2[3].conv3)
+
+    def _get_layer3_conv(self) -> List[nn.Conv2d]:
         # layer 3, 6 bottle necks
         layer3_conv = [
-            model.layer3[0].conv1,
-            model.layer3[0].conv2,
-            model.layer3[0].conv3,
-            model.layer3[0].downsample[0],
-            model.layer3[1].conv1,
-            model.layer3[1].conv2,
-            model.layer3[1].conv3,
-            model.layer3[2].conv1,
-            model.layer3[2].conv2,
-            model.layer3[2].conv3,
-            model.layer3[3].conv1,
-            model.layer3[3].conv2,
-            model.layer3[3].conv3,
-            model.layer3[4].conv1,
-            model.layer3[4].conv2,
-            model.layer3[4].conv3,
-            model.layer3[5].conv1,
-            model.layer3[5].conv2,
-            model.layer3[5].conv3,
+            self.model.layer3[0].conv1,
+            self.model.layer3[0].conv2,
+            self.model.layer3[0].conv3,
+            self.model.layer3[0].downsample[0],
+            self.model.layer3[1].conv1,
+            self.model.layer3[1].conv2,
+            self.model.layer3[1].conv3,
+            self.model.layer3[2].conv1,
+            self.model.layer3[2].conv2,
+            self.model.layer3[2].conv3,
+            self.model.layer3[3].conv1,
+            self.model.layer3[3].conv2,
+            self.model.layer3[3].conv3,
+            self.model.layer3[4].conv1,
+            self.model.layer3[4].conv2,
+            self.model.layer3[4].conv3,
+            self.model.layer3[5].conv1,
+            self.model.layer3[5].conv2,
+            self.model.layer3[5].conv3,
         ]
         return layer3_conv
 
-    def _get_layer4_conv(self, model: resnet50) -> List[nn.Conv2d]:
+    def _set_layer3_conv(self):
+        """set layer3 conv to conv wrappers"""
+        self.model.layer3[0].conv1 = Conv2dWrap(self.model.layer3[0].conv1)
+        self.model.layer3[0].conv2 = Conv2dWrap(self.model.layer3[0].conv2)
+        self.model.layer3[0].conv3 = Conv2dWrap(self.model.layer3[0].conv3)
+        self.model.layer3[0].downsample[0] = Conv2dWrap(
+            self.model.layer3[0].downsample[0]
+        )
+        self.model.layer3[1].conv1 = Conv2dWrap(self.model.layer3[1].conv1)
+        self.model.layer3[1].conv2 = Conv2dWrap(self.model.layer3[1].conv2)
+        self.model.layer3[1].conv3 = Conv2dWrap(self.model.layer3[1].conv3)
+        self.model.layer3[2].conv1 = Conv2dWrap(self.model.layer3[2].conv1)
+        self.model.layer3[2].conv2 = Conv2dWrap(self.model.layer3[2].conv2)
+        self.model.layer3[2].conv3 = Conv2dWrap(self.model.layer3[2].conv3)
+        self.model.layer3[3].conv1 = Conv2dWrap(self.model.layer3[3].conv1)
+        self.model.layer3[3].conv2 = Conv2dWrap(self.model.layer3[3].conv2)
+        self.model.layer3[3].conv3 = Conv2dWrap(self.model.layer3[3].conv3)
+        self.model.layer3[4].conv1 = Conv2dWrap(self.model.layer3[4].conv1)
+        self.model.layer3[4].conv2 = Conv2dWrap(self.model.layer3[4].conv2)
+        self.model.layer3[4].conv3 = Conv2dWrap(self.model.layer3[4].conv3)
+        self.model.layer3[5].conv1 = Conv2dWrap(self.model.layer3[5].conv1)
+        self.model.layer3[5].conv2 = Conv2dWrap(self.model.layer3[5].conv2)
+        self.model.layer3[5].conv3 = Conv2dWrap(self.model.layer3[5].conv3)
+
+    def _get_layer4_conv(self) -> List[nn.Conv2d]:
         # layer 4, 3 bottle necks
         layer4_conv = [
-            model.layer4[0].conv1,
-            model.layer4[0].conv2,
-            model.layer4[0].conv3,
-            model.layer4[0].downsample[0],
-            model.layer4[1].conv1,
-            model.layer4[1].conv2,
-            model.layer4[1].conv3,
-            model.layer4[2].conv1,
-            model.layer4[2].conv2,
-            model.layer4[2].conv3,
+            self.model.layer4[0].conv1,
+            self.model.layer4[0].conv2,
+            self.model.layer4[0].conv3,
+            self.model.layer4[0].downsample[0],
+            self.model.layer4[1].conv1,
+            self.model.layer4[1].conv2,
+            self.model.layer4[1].conv3,
+            self.model.layer4[2].conv1,
+            self.model.layer4[2].conv2,
+            self.model.layer4[2].conv3,
         ]
         return layer4_conv
 
-    def _set_conv(self, model: resnet50):
-        """wrap convolution layers"""
-        # collect each layer conv
-        pre_layer_conv = self._get_pre_layer_conv(model)
-        layer1_conv = self._get_layer1_conv(model)
-        layer2_conv = self._get_layer2_conv(model)
-        layer3_conv = self._get_layer3_conv(model)
-        layer4_conv = self._get_layer4_conv(model)
+    def _set_layer4_conv(self):
+        """set layer4 conv to conv wrappers"""
+        self.model.layer4[0].conv1 = Conv2dWrap(self.model.layer4[0].conv1)
+        self.model.layer4[0].conv2 = Conv2dWrap(self.model.layer4[0].conv2)
+        self.model.layer4[0].conv3 = Conv2dWrap(self.model.layer4[0].conv3)
+        self.model.layer4[0].downsample[0] = Conv2dWrap(
+            self.model.layer4[0].downsample[0]
+        )
+        self.model.layer4[1].conv1 = Conv2dWrap(self.model.layer4[1].conv1)
+        self.model.layer4[1].conv2 = Conv2dWrap(self.model.layer4[1].conv2)
+        self.model.layer4[1].conv3 = Conv2dWrap(self.model.layer4[1].conv3)
+        self.model.layer4[2].conv1 = Conv2dWrap(self.model.layer4[2].conv1)
+        self.model.layer4[2].conv2 = Conv2dWrap(self.model.layer4[2].conv2)
+        self.model.layer4[2].conv3 = Conv2dWrap(self.model.layer4[2].conv3)
 
-        # wrap all conv layers
-        for conv_layer in (
-            pre_layer_conv + layer1_conv + layer2_conv + layer3_conv + layer4_conv
-        ):
-            conv_layer = Conv2dWrap(conv_layer)
+    def _set_conv(self):
+        """wrap convolution layers"""
+        # set layers to conv wrappers
+        self._set_pre_layer_conv()
+        self._set_layer1_conv()
+        self._set_layer2_conv()
+        self._set_layer3_conv()
+        self._set_layer4_conv()
 
     def forward(self, x: torch.Tensor) -> Tuple[torch.Tensor]:
         """output both feature representations and logits"""
@@ -193,15 +262,15 @@ class ResNet50Pretrained(nn.Module):
         """get list of eigenvalues"""
         assert max_layer in [1, 2, 3, 4], f"max_layer {max_layer} not in [1, 2, 3, 4]"
 
-        conv_layers = self._get_pre_layer_conv(self.model)
+        conv_layers = self._get_pre_layer_conv()
         if max_layer >= 1:
-            conv_layers += self._get_layer1_conv(self.model)
+            conv_layers += self._get_layer1_conv()
         if max_layer >= 2:
-            conv_layers += self._get_layer2_conv(self.model)
+            conv_layers += self._get_layer2_conv()
         if max_layer >= 3:
-            conv_layer += self._get_layer3_conv(self.model)
+            conv_layers += self._get_layer3_conv()
         if max_layer >= 4:
-            conv_layer += self._get_layer4_conv(self.model)
+            conv_layers += self._get_layer4_conv()
 
         result_list = []
         for conv_layer in conv_layers:

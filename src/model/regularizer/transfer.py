@@ -34,7 +34,12 @@ def bss_transfer(features: torch.Tensor, k: int = 1) -> torch.Tensor:
     """
     # svd squared implemented through eigenvalues
     cov = features @ features.T
-    eigvals = torch.lobpcg(cov, k, largest=False)
+    eigvals, _ = torch.topk(
+        torch.linalg.eigvalsh(cov),
+        k,
+        largest=False,  # take bottom
+        sorted=False,  # save time
+    )
     penalty = sum(eigvals)
     return penalty
 
@@ -50,6 +55,6 @@ def spectral_ub_transfer(model: nn.Module) -> torch.Tensor:
 
     # last layer head
     W = model.fc.weight
-    eig = torch.linalg.eigvals(W.T @ W).max()
+    eig = torch.linalg.eigvalsh(W.T @ W).max()
     reg_term += eig
     return reg_term
