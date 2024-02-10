@@ -19,8 +19,10 @@ from model import (
     ResNet50Pretrained,
     l2sp_transfer,
     bss_transfer,
-    top_eig_ub_transfer,
-    spectral_ub_transfer
+    # top_eig_ub_transfer,
+    # spectral_ub_transfer
+    top_eig_ub_transfer_update,
+    spectral_ub_transfer_update
 )
 from utils import load_config, get_logging_name
 
@@ -126,7 +128,8 @@ opt_fc = getattr(optim, args.opt)(
     weight_decay=0.
 )
 
-def get_reg_loss(module: ResNet50Pretrained, features: torch.Tensor) -> torch.Tensor: 
+# =================== regularization updates =====================
+def get_reg_loss(model: ResNet50Pretrained, features: torch.Tensor) -> torch.Tensor: 
     """
     compute regularization loss
     in transfer learning, the regularizations are additive
@@ -136,20 +139,37 @@ def get_reg_loss(module: ResNet50Pretrained, features: torch.Tensor) -> torch.Te
         reg_loss += l2sp_transfer(model, args.alpha, args.beta)
     if "bss" in args.reg:
         reg_loss += args.lam * bss_transfer(features)
-    if "eig-ub" in args.reg:
-        if args.max_layer is None:
-            max_layer = 4 
-        else: 
-            max_layer = args.max_layer
-        reg_loss += args.lam * top_eig_ub_transfer(model, max_layer=max_layer)
-    if "spectral" in args.reg: 
-        reg_loss += args.lam * spectral_ub_transfer(model)
     
     if reg_loss == 0: 
         return None 
     else:
         return reg_loss
     
+def update_conv(model: ResNet50Pretrained, opt_backbone: optim, opt_fc: optim):
+    """individually update convolution layers"""
+    if "spectral" in args.reg:
+        spectral_ub_transfer_update(model, opt_backbone, opt_fc, args.lam)
+    if "eig-ub" in args.reg:
+        if args.max_layer is None:
+            max_layer = 4
+        else:
+            max_layer = args.max_layer
+        top_eig_ub_transfer_update(model, opt_backbone, max_layer=max_layer, lam=args.lam)
+
+def regularization_update(model: ResNet50Pretrained, features: torch.Tensor, opt_backbone: optim, opt_fc: optim):
+    """regularization update"""
+    # predecessors
+    opt_backbone.zero_grad()
+    opt_fc.zero_grad()
+    reg_loss = get_reg_loss(model, features)
+    reg_loss.backward()
+    opt_backbone.step()
+    opt_fc.step()
+
+    # convolution layer singular value controls
+    update_conv(model, opt_backbone, opt_fc)
+
+# ================= main driver training functions =================
 def train():
     """train a model with/without regularization"""
     loss_fn = nn.CrossEntropyLoss()
@@ -189,30 +209,21 @@ def train():
             total_train_loss += train_loss * len(X_train)
             total_train_acc += y_pred_logits.argmax(dim=-1).eq(y_train).sum()
 
-            # regularization on a per parameter update basis
-            if (args.reg_freq_update is not None) and (param_update_count % args.reg_freq_update == 0):
-                reg_loss = get_reg_loss(model, features)
-                if reg_loss is not None:
-                    train_loss += reg_loss
-
             # step
             train_loss.backward()
             opt_backbone.step()
             opt_fc.step()
+
+            # regularization on a per parameter update basis
+            if (args.reg_freq_update is not None) and (param_update_count % args.reg_freq_update == 0):
+                regularization_update(model, features, opt_backbone, opt_fc)
 
         train_loss = total_train_loss / len(train_set)
         train_acc = total_train_acc / len(train_set)
 
         # regularization after each epoch, if not updated on a per parameter update basis
         if (i > args.burnin) and (args.reg_freq_update is None) and (i % args.reg_freq == 0):
-            reg_loss = get_reg_loss(model, features) # * this only gets the last batch of features
-
-            if reg_loss is not None:
-                opt_backbone.zero_grad()
-                opt_fc.zero_grad()
-                reg_loss.backward()
-                opt_fc.step()
-                opt_backbone.step()
+            regularization_update(model, features, opt_backbone, opt_fc) # * only last batch of features is used
 
         if i % args.log_epoch == 0:
             # testing

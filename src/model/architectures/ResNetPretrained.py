@@ -6,7 +6,7 @@ for transfer learning only: load and wrap pretrained model for regularizations
 """
 
 # load packages
-from typing import List, Tuple
+from typing import Callable, List, Tuple
 import torch
 import torch.nn as nn
 from torchvision.models import resnet50, ResNet50_Weights
@@ -260,6 +260,13 @@ class ResNet50Pretrained(nn.Module):
     # ----------------- for regularization only ---------------------
     def get_conv_layer_eigvals(self, max_layer: int = 4) -> List[torch.Tensor]:
         """get list of eigenvalues"""
+        result_list = []
+        for func in self.get_conv_layer_eigvals_funcs(max_layer=max_layer):
+            result_list.append(func())
+        return result_list
+
+    def get_conv_layer_eigvals_funcs(self, max_layer: int = 4) -> List[Callable]:
+        """get functions bind to conv2d wrappers"""
         assert max_layer in [1, 2, 3, 4], f"max_layer {max_layer} not in [1, 2, 3, 4]"
 
         conv_layers = self._get_pre_layer_conv()
@@ -274,7 +281,7 @@ class ResNet50Pretrained(nn.Module):
 
         result_list = []
         for conv_layer in conv_layers:
-            result_list.append(conv_layer._get_conv_layer_eigvals())
+            result_list.append(conv_layer._get_conv_layer_eigvals)
 
         return result_list
 

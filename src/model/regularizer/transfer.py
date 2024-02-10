@@ -5,7 +5,9 @@ collection of regularizations on transfer learning tasks
 # load packages
 import torch
 import torch.nn as nn
-from .conv import top_eig_ub_regularizer_conv
+import torch.optim as optim
+
+# from .conv import top_eig_ub_regularizer_conv
 
 
 def l2sp_transfer(
@@ -44,17 +46,46 @@ def bss_transfer(features: torch.Tensor, k: int = 1) -> torch.Tensor:
     return penalty
 
 
-def top_eig_ub_transfer(model: nn.Module, max_layer: int = 4) -> torch.Tensor:
-    """ours"""
-    return top_eig_ub_regularizer_conv(model, max_layer)
+# ----- collecting and backprop is too memory expansive -------
+# def top_eig_ub_transfer(model: nn.Module, max_layer: int = 4) -> torch.Tensor:
+#     """ours"""
+#     return top_eig_ub_regularizer_conv(model, max_layer)
 
 
-def spectral_ub_transfer(model: nn.Module) -> torch.Tensor:
-    """ours + last  layer spectral regularization"""
-    reg_term = top_eig_ub_transfer(model)
+# def spectral_ub_transfer(model: nn.Module) -> torch.Tensor:
+#     """ours + last  layer spectral regularization"""
+#     reg_term = top_eig_ub_transfer(model)
 
-    # last layer head
+#     # last layer head
+#     W = model.fc.weight
+#     eig = torch.linalg.eigvalsh(W.T @ W).max()
+#     reg_term += eig
+#     return reg_term
+
+
+def top_eig_ub_transfer_update(
+    model: nn.Module, opt: optim, max_layer: int = 4, lam: float = 0.01
+):
+    """compute eigenvalues and update for each convolution layers"""
+    funcs = model.get_conv_layer_eigvals_funcs()
+    for func in funcs:
+        opt.zero_grad()
+        eig_loss = func() * lam
+        eig_loss.backward()
+        opt.step()
+
+
+def spectral_ub_transfer_update(
+    model: nn.Module, opt_backbone: optim, opt_fc: optim, lam: float = 0.01
+):
+    """compute eigenvalues and update for each convolution layers, and last connection layer"""
+    # eigenvalues
+    top_eig_ub_transfer_update(model, opt_backbone, max_layer=4, lam=lam)
+
+    # last layer norm
     W = model.fc.weight
     eig = torch.linalg.eigvalsh(W.T @ W).max()
-    reg_term += eig
-    return reg_term
+    eig_loss = eig * lam
+    opt_fc.zero_grad()
+    eig_loss.backward()
+    opt_fc.step()
