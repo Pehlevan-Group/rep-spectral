@@ -63,16 +63,30 @@ def bss_transfer(features: torch.Tensor, k: int = 1) -> torch.Tensor:
 #     return reg_term
 
 
-def top_eig_ub_transfer_update(
-    model: nn.Module, opt: optim, max_layer: int = 4, lam: float = 0.01
-):
-    """compute eigenvalues and update for each convolution layers"""
-    funcs = model.get_conv_layer_eigvals_funcs()
-    for func in funcs:
-        opt.zero_grad()
-        eig_loss = func() * lam
+# def top_eig_ub_transfer_update(
+#     model: nn.Module, opt: optim, max_layer: int = 4, lam: float = 0.01
+# ):
+#     """compute eigenvalues and update for each convolution layers"""
+#     funcs = model.get_conv_layer_eigvals_funcs()
+#     for func in funcs:
+#         opt.zero_grad()
+#         eig_loss = func() * lam
+#         eig_loss.backward()
+#         opt.step()
+
+# * testing alternative implementation, bypassing optim
+def top_eig_ub_transfer_update(model: nn.Module, opt: optim, max_layer: int=4, lam: float=0.01):
+    """bypassing optim"""
+    conv_layers = model.get_conv_layers(max_layer=max_layer)
+    for conv_layer in conv_layers:
+        conv_layer.zero_grad()
+        eig_loss = conv_layer._get_conv_layer_eigvals() * lam 
         eig_loss.backward()
-        opt.step()
+        conv_layer_grad = conv_layer.wrap.weight.grad 
+
+        # individual update
+        with torch.no_grad():
+            conv_layer.wrap.weight.copy_(conv_layer.wrap.weight - conv_layer_grad)
 
 
 def spectral_ub_transfer_update(

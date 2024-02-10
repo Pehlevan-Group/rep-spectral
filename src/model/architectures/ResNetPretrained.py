@@ -267,6 +267,15 @@ class ResNet50Pretrained(nn.Module):
 
     def get_conv_layer_eigvals_funcs(self, max_layer: int = 4) -> List[Callable]:
         """get functions bind to conv2d wrappers"""
+        conv_layers = self.get_conv_layers(max_layer=max_layer)
+        result_list = []
+        for conv_layer in conv_layers:
+            result_list.append(conv_layer._get_conv_layer_eigvals)
+
+        return result_list
+    
+    def get_conv_layers(self, max_layer: int=4) -> List[Conv2dWrap]:
+        """get references to all convolution layers"""
         assert max_layer in [1, 2, 3, 4], f"max_layer {max_layer} not in [1, 2, 3, 4]"
 
         conv_layers = self._get_pre_layer_conv()
@@ -279,11 +288,7 @@ class ResNet50Pretrained(nn.Module):
         if max_layer >= 4:
             conv_layers += self._get_layer4_conv()
 
-        result_list = []
-        for conv_layer in conv_layers:
-            result_list.append(conv_layer._get_conv_layer_eigvals)
-
-        return result_list
+        return conv_layers
 
     def get_param_l2sp(self) -> torch.Tensor:
         """
