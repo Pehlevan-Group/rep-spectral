@@ -156,19 +156,6 @@ def update_conv(model: ResNet50Pretrained, opt_backbone: optim, opt_fc: optim):
             max_layer = args.max_layer
         top_eig_ub_transfer_update(model, opt_backbone, max_layer=max_layer, lam=args.lam)
 
-def regularization_update(model: ResNet50Pretrained, features: torch.Tensor, opt_backbone: optim, opt_fc: optim):
-    """regularization update"""
-    # predecessors
-    opt_backbone.zero_grad()
-    opt_fc.zero_grad()
-    reg_loss = get_reg_loss(model, features)
-    reg_loss.backward()
-    opt_backbone.step()
-    opt_fc.step()
-
-    # convolution layer singular value controls
-    update_conv(model, opt_backbone, opt_fc)
-
 # ================= main driver training functions =================
 def train():
     """train a model with/without regularization"""
@@ -209,21 +196,28 @@ def train():
             total_train_loss += train_loss * len(X_train)
             total_train_acc += y_pred_logits.argmax(dim=-1).eq(y_train).sum()
 
+            # regularization on predecessors
+            if (args.reg_freq_update is not None) and (param_update_count % args.reg_freq_update == 0):
+                reg_loss = get_reg_loss(model, features)
+                if reg_loss is not None:
+                    train_loss += reg_loss
+
             # step
             train_loss.backward()
             opt_backbone.step()
             opt_fc.step()
 
-            # regularization on a per parameter update basis
+            # regularization on convolution layers
             if (args.reg_freq_update is not None) and (param_update_count % args.reg_freq_update == 0):
-                regularization_update(model, features, opt_backbone, opt_fc)
+                update_conv(model, opt_backbone, opt_fc)
 
         train_loss = total_train_loss / len(train_set)
         train_acc = total_train_acc / len(train_set)
 
         # regularization after each epoch, if not updated on a per parameter update basis
         if (i > args.burnin) and (args.reg_freq_update is None) and (i % args.reg_freq == 0):
-            regularization_update(model, features, opt_backbone, opt_fc) # * only last batch of features is used
+            raise NotImplementedError("updating on per epoch basis is not supported, since features gradient will be discarded")
+            # regularization_update(model, features, opt_backbone, opt_fc) # * only last batch of features is used
 
         if i % args.log_epoch == 0:
             # testing
