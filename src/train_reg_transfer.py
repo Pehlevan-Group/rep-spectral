@@ -111,7 +111,7 @@ test_loader = DataLoader(test_set, batch_size=args.batch_size * 4, shuffle=False
 print(f'{args.data} data loaded')
 
 # get model
-model = ResNet50Pretrained(num_classes)# .to(device)
+model = ResNet50Pretrained(num_classes).to(device)
 
 # get optimizer 
 # backbone parameters
@@ -137,12 +137,15 @@ if args.iterative:
             max_layer = args.max_layer 
         else:
             max_layer = 4
-        v_init = init_model_right_singular_conv(model, tol=args.tol, h=224, w=224, max_layer=max_layer)
+        
+        # set up initial guess dump path
+        dump_path = os.path.join(paths["model_dir"], "resnet50pt_224_224_right_v_init")
+        v_init = init_model_right_singular_conv(
+            model, tol=args.tol, h=224, w=224, max_layer=max_layer, 
+            dump_path=dump_path
+        )
 else:
     v_init = {}
-
-# send to device
-model = model.to(device)
 
 # =================== regularization updates =====================
 def get_reg_loss(model: ResNet50Pretrained, features: torch.Tensor) -> torch.Tensor: 

@@ -289,24 +289,27 @@ class ResNet50Pretrained(nn.Module):
             conv_layers += self._get_layer4_conv()
 
         return conv_layers
-    
-    def get_conv_layers_names(self, max_layer: int=4) -> List[str]:
+
+    def get_conv_layers_names(self, max_layer: int = 4) -> List[str]:
         """use string to store convolution layer right singular vector"""
         assert max_layer in [1, 2, 3, 4], f"max_layer {max_layer} not in [1, 2, 3, 4]"
-        names = [name for (name, _) in list(self.model.named_parameters()) if "conv" in name or "downsample.0" in name]
+        names = [
+            name
+            for (name, _) in list(self.model.named_parameters())
+            if "conv" in name or "downsample.0" in name
+        ]
 
-        # filter out 
+        # filter out
         if max_layer < 4:
             names = [name for name in names if "layer4" not in name]
         if max_layer < 3:
             names = [name for name in names if "layer3" not in name]
         if max_layer < 2:
             names = [name for name in names if "layer2" not in name]
-        
+
         # replace "." with "_"
         names = [name.replace(".", "_") for name in names]
         return names
-
 
     def get_param_l2sp(self) -> torch.Tensor:
         """

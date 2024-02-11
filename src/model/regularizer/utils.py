@@ -3,6 +3,7 @@ some utility functions for regularizer computations
 """
 
 # load packages
+import os
 import warnings
 from typing import Dict
 from tqdm import tqdm
@@ -228,34 +229,66 @@ def init_model_right_singular(
 
 @torch.no_grad()
 def init_model_right_singular_conv(
-    model: nn.Module, tol: float = 1e-4, h: int = 224, w: int = 224, max_layer=4
+    model: nn.Module,
+    tol: float = 1e-4,
+    h: int = 224,
+    w: int = 224,
+    max_layer=4,
+    dump_path: str = None,
 ) -> Dict[nn.Module, torch.Tensor]:
     """
     find the top right singular value for convolution layer in ResNet models
-    ! currently only supporting the pretrained module (`ResNet50Pretrained` class)
+    * currently only supporting the pretrained module (`ResNet50Pretrained` class)
+
+    we load from dump_path if all initial guesses are available
+    otherwise initialize
 
     :param model: ResNet50Pretrained
     :parma tol: the tolerance in consecutive singular direction deviation
     :param h, w: the height and width of input image
     :param max_layer: maximum number of blocks to regularize
+    :param dump_path: the path to write/load precomputed right singular vectors
     """
-    v_init_by_conv = {}
+    # register input shapes to each layer
     conv_layers = model.get_conv_layers(max_layer=max_layer)
     conv_layers_names = model.get_conv_layers_names(max_layer=max_layer)
-    for name, layer in tqdm(zip(conv_layers_names, conv_layers)):
-        kernel = layer.wrap.weight
-        stride = layer.wrap.stride[0]  # * assume symmetric
-        P = get_conv_fft2_blocks(kernel, h, w, stride)
 
-        # get sufficiently good starting point
-        v_init = batch_iterative_top_right_singular_vector(P, v=None, tol=tol)
+    if conv_layers[0]._input_shapes is None:
+        fake_input = torch.randn((1, 3, h, w))
+        model(fake_input)  # register shapes
 
-        # save to cpu
-        # TODO: load and save precomputed right singular vectors
-        # TODO: read it every time we start
-        v_init_by_conv[name] = v_init.detach().cpu()
-        torch.cuda.empty_cache()
-    return v_init
+    v_init_by_conv = {}
+    # if initial guesses already available, read
+    if dump_path is not None and len(os.listdir(dump_path)) == 53:
+        for name in conv_layers_names:
+            v_load_path = os.path.join(dump_path, name + ".pt")
+            v_init_by_conv[name] = torch.load(v_load_path, map_location="cpu")
+
+    # if not available, initialize
+    else:
+        for name, layer in tqdm(zip(conv_layers_names, conv_layers)):
+            kernel = layer.wrap.weight
+            stride = layer.wrap.stride[0]  # * assume symmetric
+            input_h, input_w = layer._input_shapes
+            P = get_conv_fft2_blocks(kernel, input_h, input_w, stride)
+
+            # get sufficiently good starting point and move to cpu
+            v_init = (
+                batch_iterative_top_right_singular_vector(P, v=None, tol=tol)
+                .detach()
+                .cpu()
+            )
+
+            # save to cpu
+            v_init_by_conv[name] = v_init
+            torch.cuda.empty_cache()
+
+            # dump to path
+            if dump_path is not None:
+                v_write_path = os.path.join(dump_path, name + ".pt")
+                torch.save(v_init, v_write_path)
+
+    return v_init_by_conv
 
 
 # ============================
