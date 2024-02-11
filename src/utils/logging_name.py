@@ -69,6 +69,12 @@ def get_logging_name(args, mode: str) -> List[str]:
 
     # ================ transfer learning =================
     elif mode == "transfer":
+        reg_name = str(reg_name)
+        # add iterative
+        if ("spectral" in args.reg or "eig-ub" in args.reg) and args.iterative:
+            reg_name = reg_name.replace("spectral", "spectral-iterative")
+            reg_name = reg_name.replace("eig-ub", "eig-ub-iterative")
+
         base_log_name = (
             f"{args.data}_m{args.model}_bs{args.batch_size}_lr{args.lr}_opt{args.opt}"
             + f"_mom{args.mom}_regNone_e{args.epochs}_seed{args.seed}"

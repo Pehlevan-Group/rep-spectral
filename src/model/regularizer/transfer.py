@@ -7,7 +7,8 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 
-# from .conv import top_eig_ub_regularizer_conv
+from .conv import top_eig_ub_regularizer_conv
+from .utils import batch_iterative_top_right_singular_vector, get_conv_fft2_blocks
 
 
 def l2sp_transfer(
@@ -74,27 +75,90 @@ def bss_transfer(features: torch.Tensor, k: int = 1) -> torch.Tensor:
 #         eig_loss.backward()
 #         opt.step()
 
+
 # * testing alternative implementation, bypassing optim
-def top_eig_ub_transfer_update(model: nn.Module, opt: optim, max_layer: int=4, lam: float=0.01):
-    """bypassing optim"""
+def top_eig_ub_transfer_update(
+    model: nn.Module,
+    max_layer: int = 4,
+    lam: float = 0.01,
+    iterative=True,
+    v_init=None,
+    max_update=5,
+    tol=1e-4,
+):
+    """
+    eigenvalue upper bound regularization for convolution layer
+    change parameter inside this functions
+
+    :param model: ResNet50Pretrained
+    :param max_layer: the maximum num blocks to regularize
+    :param lam: the regularization strength
+    :param iterative: True to use power iteration, False exact
+    :param v_init: a Dict storing initial guesses right singular vectors in CPU
+    :param max_update: the maximum number power iterations
+    :param tol: stopping criterion for power iterations
+    """
     conv_layers = model.get_conv_layers(max_layer=max_layer)
     for conv_layer in conv_layers:
         conv_layer.zero_grad()
-        eig_loss = conv_layer._get_conv_layer_eigvals() * lam 
-        eig_loss.backward()
-        conv_layer_grad = conv_layer.wrap.weight.grad 
 
-        # individual update
+        if iterative:
+            # compute fft2 blocks
+            h, w = conv_layer._input_shapes
+            stride = conv_layer.wrap.stride[0]
+            P = get_conv_fft2_blocks(conv_layer.wrap.weight, h, w, stride)
+
+            # update right singular vectors
+            v_new = batch_iterative_top_right_singular_vector(
+                P, v_init[conv_layer].to(P.device), tol=tol, max_update=max_update
+            )
+
+            # compute eigenvalue for backprop
+            u_sigma = torch.einsum("...ij,...j", P, v_new)
+            eig_loss = (
+                (u_sigma.conj() * u_sigma).sum(dim=-1).real.max()
+            )  # sigma^2=lambda
+            eig_loss *= lam
+            eig_loss.backward()
+
+            # update singular values
+            v_init[conv_layer] = v_new.detach().cpu()
+        else:
+            # * not recommended, GPU eigvalsh takes a very long time for these sizes
+            eig_loss = conv_layer._get_conv_layer_eigvals() * lam
+            eig_loss.backward()
+
+        conv_layer_grad = conv_layer.wrap.weight.grad
+
+        # individual update, bypassing optimizer
         with torch.no_grad():
             conv_layer.wrap.weight.copy_(conv_layer.wrap.weight - conv_layer_grad)
 
 
 def spectral_ub_transfer_update(
-    model: nn.Module, opt_backbone: optim, opt_fc: optim, lam: float = 0.01
+    model: nn.Module,
+    opt_fc: optim,
+    max_layer: int = 4,
+    lam: float = 0.01,
+    iterative=True,
+    v_init=None,
+    max_update: int = 5,
+    tol: float = 1e-4,
 ):
-    """compute eigenvalues and update for each convolution layers, and last connection layer"""
+    """
+    compute eigenvalues and update for each convolution layers, and last connection layer
+    :param opt_fc: the optimizer for the last layer
+    """
     # eigenvalues
-    top_eig_ub_transfer_update(model, opt_backbone, max_layer=4, lam=lam)
+    top_eig_ub_transfer_update(
+        model,
+        max_layer=max_layer,
+        lam=lam,
+        iterative=iterative,
+        v_init=v_init,
+        max_update=max_update,
+        tol=tol,
+    )
 
     # last layer norm
     W = model.fc.weight

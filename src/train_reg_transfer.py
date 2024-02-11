@@ -22,7 +22,8 @@ from model import (
     # top_eig_ub_transfer,
     # spectral_ub_transfer
     top_eig_ub_transfer_update,
-    spectral_ub_transfer_update
+    spectral_ub_transfer_update,
+    init_model_right_singular_conv
 )
 from utils import load_config, get_logging_name
 
@@ -56,8 +57,8 @@ parser.add_argument('--reg-freq-update', default=None, type=int,
 
 # # iterative singular 
 parser.add_argument('--iterative', action='store_true', default=False, help='True to turn on iterative method')
-# parser.add_argument('--tol', default=1e-6, type=float, help='the tolerance for stopping the iterative method')
-# parser.add_argument('--max-update', default=10, type=int, help='the maximum update iteration during training')
+parser.add_argument('--tol', default=1e-4, type=float, help='the tolerance for stopping the iterative method')
+parser.add_argument('--max-update', default=5, type=int, help='the maximum update iteration during training')
 
 # logging
 parser.add_argument('--log-epoch', default=5, type=int, help='logging frequency')
@@ -128,6 +129,19 @@ opt_fc = getattr(optim, args.opt)(
     weight_decay=0.
 )
 
+# init model singular values if using power iteration
+if args.iterative:
+    if 'spectral' in args.reg or 'eig-ub' in args.reg:
+        print("initialize top right singular direction")
+        if "eig-ub" in args.reg and args.max_layer is not None: 
+            max_layer = args.max_layer 
+        else:
+            max_layer = 4
+        v_init = init_model_right_singular_conv(model.model, tol=args.tol, h=224, w=224, max_layer=max_layer)
+else:
+    v_init = {}
+
+
 # =================== regularization updates =====================
 def get_reg_loss(model: ResNet50Pretrained, features: torch.Tensor) -> torch.Tensor: 
     """
@@ -148,13 +162,29 @@ def get_reg_loss(model: ResNet50Pretrained, features: torch.Tensor) -> torch.Ten
 def update_conv(model: ResNet50Pretrained, opt_backbone: optim, opt_fc: optim):
     """individually update convolution layers"""
     if "spectral" in args.reg:
-        spectral_ub_transfer_update(model, opt_backbone, opt_fc, args.lam)
+        spectral_ub_transfer_update(
+            model, opt_fc, 
+            max_layer=args.max_layer, 
+            lam=args.lam, 
+            iterative=args.iterative, 
+            v_init=v_init, 
+            max_update=args.max_update, 
+            tol=args.tol
+        )
     if "eig-ub" in args.reg:
         if args.max_layer is None:
             max_layer = 4
         else:
             max_layer = args.max_layer
-        top_eig_ub_transfer_update(model, opt_backbone, max_layer=max_layer, lam=args.lam)
+        top_eig_ub_transfer_update(
+            model,
+            max_layer=max_layer,
+            lam=args.lam,
+            iterative=args.iterative, 
+            v_init=v_init, 
+            max_update=args.max_update,
+            tol=args.tol
+        )
 
 # ================= main driver training functions =================
 def train():
@@ -178,8 +208,6 @@ def train():
             warnings.warn('Not finding base model, retraining ...')
             # relapse back to full training
             pbar = tqdm(range(args.epochs + 1))
-
-    # TODO: iterative method?
 
     # training
     for i in pbar:

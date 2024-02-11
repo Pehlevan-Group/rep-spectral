@@ -273,8 +273,8 @@ class ResNet50Pretrained(nn.Module):
             result_list.append(conv_layer._get_conv_layer_eigvals)
 
         return result_list
-    
-    def get_conv_layers(self, max_layer: int=4) -> List[Conv2dWrap]:
+
+    def get_conv_layers(self, max_layer: int = 4) -> List[Conv2dWrap]:
         """get references to all convolution layers"""
         assert max_layer in [1, 2, 3, 4], f"max_layer {max_layer} not in [1, 2, 3, 4]"
 
