@@ -99,7 +99,8 @@ def top_eig_ub_transfer_update(
     :param tol: stopping criterion for power iterations
     """
     conv_layers = model.get_conv_layers(max_layer=max_layer)
-    for conv_layer in conv_layers:
+    conv_layers_names = model.get_conv_layers_names(max_layer=max_layer)
+    for name, conv_layer in zip(conv_layers_names, conv_layers):
         conv_layer.zero_grad()
 
         if iterative:
@@ -122,7 +123,8 @@ def top_eig_ub_transfer_update(
             eig_loss.backward()
 
             # update singular values
-            v_init[conv_layer] = v_new.detach().cpu()
+            v_init[name] = v_new.detach().cpu()
+            torch.cuda.empty_cache()
         else:
             # * not recommended, GPU eigvalsh takes a very long time for these sizes
             eig_loss = conv_layer._get_conv_layer_eigvals() * lam

@@ -58,7 +58,7 @@ parser.add_argument('--reg-freq-update', default=None, type=int,
 # # iterative singular 
 parser.add_argument('--iterative', action='store_true', default=False, help='True to turn on iterative method')
 parser.add_argument('--tol', default=1e-4, type=float, help='the tolerance for stopping the iterative method')
-parser.add_argument('--max-update', default=5, type=int, help='the maximum update iteration during training')
+parser.add_argument('--max-update', default=1, type=int, help='the maximum update iteration during training')
 
 # logging
 parser.add_argument('--log-epoch', default=5, type=int, help='logging frequency')
@@ -111,7 +111,7 @@ test_loader = DataLoader(test_set, batch_size=args.batch_size * 4, shuffle=False
 print(f'{args.data} data loaded')
 
 # get model
-model = ResNet50Pretrained(num_classes).to(device)
+model = ResNet50Pretrained(num_classes)# .to(device)
 
 # get optimizer 
 # backbone parameters
@@ -137,10 +137,12 @@ if args.iterative:
             max_layer = args.max_layer 
         else:
             max_layer = 4
-        v_init = init_model_right_singular_conv(model.model, tol=args.tol, h=224, w=224, max_layer=max_layer)
+        v_init = init_model_right_singular_conv(model, tol=args.tol, h=224, w=224, max_layer=max_layer)
 else:
     v_init = {}
 
+# send to device
+model = model.to(device)
 
 # =================== regularization updates =====================
 def get_reg_loss(model: ResNet50Pretrained, features: torch.Tensor) -> torch.Tensor: 

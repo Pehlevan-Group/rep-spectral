@@ -241,7 +241,8 @@ def init_model_right_singular_conv(
     """
     v_init_by_conv = {}
     conv_layers = model.get_conv_layers(max_layer=max_layer)
-    for layer in tqdm(conv_layers):
+    conv_layers_names = model.get_conv_layers_names(max_layer=max_layer)
+    for name, layer in tqdm(zip(conv_layers_names, conv_layers)):
         kernel = layer.wrap.weight
         stride = layer.wrap.stride[0]  # * assume symmetric
         P = get_conv_fft2_blocks(kernel, h, w, stride)
@@ -250,8 +251,10 @@ def init_model_right_singular_conv(
         v_init = batch_iterative_top_right_singular_vector(P, v=None, tol=tol)
 
         # save to cpu
-        v_init_by_conv[layer] = v_init.cpu()
-
+        # TODO: load and save precomputed right singular vectors
+        # TODO: read it every time we start
+        v_init_by_conv[name] = v_init.detach().cpu()
+        torch.cuda.empty_cache()
     return v_init
 
 
