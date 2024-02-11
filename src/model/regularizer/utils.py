@@ -254,7 +254,7 @@ def init_model_right_singular_conv(
     conv_layers_names = model.get_conv_layers_names(max_layer=max_layer)
 
     if conv_layers[0]._input_shapes is None:
-        fake_input = torch.randn((1, 3, h, w))
+        fake_input = torch.randn((1, 3, h, w), device=conv_layers[0].wrap.weight.device)
         model(fake_input)  # register shapes
 
     v_init_by_conv = {}
@@ -262,8 +262,10 @@ def init_model_right_singular_conv(
     if dump_path is not None and len(os.listdir(dump_path)) == 53:
         for name in conv_layers_names:
             v_load_path = os.path.join(dump_path, name + ".pt")
-            v_init_by_conv[name] = torch.load(v_load_path, map_location="cpu")
-
+            v_init_by_conv[name] = torch.load(
+                v_load_path, map_location=conv_layers[0].wrap.weight.device
+            )
+        print("loaded from pre-computed right singular vectors")
     # if not available, initialize
     else:
         for name, layer in tqdm(zip(conv_layers_names, conv_layers)):
@@ -273,11 +275,9 @@ def init_model_right_singular_conv(
             P = get_conv_fft2_blocks(kernel, input_h, input_w, stride)
 
             # get sufficiently good starting point and move to cpu
-            v_init = (
-                batch_iterative_top_right_singular_vector(P, v=None, tol=tol)
-                .detach()
-                .cpu()
-            )
+            v_init = batch_iterative_top_right_singular_vector(
+                P, v=None, tol=tol, max_update=1000
+            ).detach()
 
             # save to cpu
             v_init_by_conv[name] = v_init
@@ -293,8 +293,7 @@ def init_model_right_singular_conv(
 
 # ============================
 # ---- for convolution -------
-# =============================
-@torch.no_grad()
+# ============================
 def get_conv_fft2_blocks(
     kernel: torch.Tensor, h: int, w: int, stride: int
 ) -> torch.Tensor:

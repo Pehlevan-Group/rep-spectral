@@ -7,7 +7,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 
-from .conv import top_eig_ub_regularizer_conv
+# from .conv import top_eig_ub_regularizer_conv
 from .utils import batch_iterative_top_right_singular_vector, get_conv_fft2_blocks
 
 
@@ -76,7 +76,6 @@ def bss_transfer(features: torch.Tensor, k: int = 1) -> torch.Tensor:
 #         opt.step()
 
 
-# * testing alternative implementation, bypassing optim
 def top_eig_ub_transfer_update(
     model: nn.Module,
     max_layer: int = 4,
@@ -88,7 +87,7 @@ def top_eig_ub_transfer_update(
 ):
     """
     eigenvalue upper bound regularization for convolution layer
-    change parameter inside this functions
+    change parameter inside this functions, bypassing optim
 
     :param model: ResNet50Pretrained
     :param max_layer: the maximum num blocks to regularize
@@ -111,20 +110,18 @@ def top_eig_ub_transfer_update(
 
             # update right singular vectors
             v_new = batch_iterative_top_right_singular_vector(
-                P, v_init[conv_layer].to(P.device), tol=tol, max_update=max_update
+                P, v_init[name], tol=tol, max_update=max_update
             )
 
             # compute eigenvalue for backprop
             u_sigma = torch.einsum("...ij,...j", P, v_new)
-            eig_loss = (
+            eig_loss = lam * (
                 (u_sigma.conj() * u_sigma).sum(dim=-1).real.max()
             )  # sigma^2=lambda
-            eig_loss *= lam
             eig_loss.backward()
 
             # update singular values
-            v_init[name] = v_new.detach().cpu()
-            torch.cuda.empty_cache()
+            v_init[name] = v_new.detach()
         else:
             # * not recommended, GPU eigvalsh takes a very long time for these sizes
             eig_loss = conv_layer._get_conv_layer_eigvals() * lam

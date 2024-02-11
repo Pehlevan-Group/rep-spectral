@@ -52,7 +52,7 @@ parser.add_argument("--epochs", default=200, type=int, help='the number of epoch
 parser.add_argument('--burnin', default=0, type=int, help='the period before which no regularization is imposed')
 parser.add_argument('--reg-freq', default=1, type=int, help='the frequency of imposing regularizations')
 parser.add_argument('--reg-freq-update', default=None, type=int, 
-                    help='the frequency of imposing regularization per parameter update: None means reg every epoch only'
+                    help='the frequency of imposing convolution singular value regularization per parameter update: None means reg every epoch only'
                     )
 
 # # iterative singular 
@@ -140,6 +140,7 @@ if args.iterative:
         
         # set up initial guess dump path
         dump_path = os.path.join(paths["model_dir"], "resnet50pt_224_224_right_v_init")
+        os.makedirs(dump_path, exist_ok=True)
         v_init = init_model_right_singular_conv(
             model, tol=args.tol, h=224, w=224, max_layer=max_layer, 
             dump_path=dump_path
@@ -164,12 +165,12 @@ def get_reg_loss(model: ResNet50Pretrained, features: torch.Tensor) -> torch.Ten
     else:
         return reg_loss
     
-def update_conv(model: ResNet50Pretrained, opt_backbone: optim, opt_fc: optim):
+def update_conv(model: ResNet50Pretrained, opt_fc: optim):
     """individually update convolution layers"""
     if "spectral" in args.reg:
         spectral_ub_transfer_update(
             model, opt_fc, 
-            max_layer=args.max_layer, 
+            max_layer=4, 
             lam=args.lam, 
             iterative=args.iterative, 
             v_init=v_init, 
@@ -229,11 +230,11 @@ def train():
             total_train_loss += train_loss * len(X_train)
             total_train_acc += y_pred_logits.argmax(dim=-1).eq(y_train).sum()
 
-            # regularization on predecessors
-            if (args.reg_freq_update is not None) and (param_update_count % args.reg_freq_update == 0):
-                reg_loss = get_reg_loss(model, features)
-                if reg_loss is not None:
-                    train_loss += reg_loss
+            # regularization on predecessors (every parameter update)
+            # if (args.reg_freq_update is not None) and (param_update_count % args.reg_freq_update == 0):
+            reg_loss = get_reg_loss(model, features)
+            if reg_loss is not None:
+                train_loss += reg_loss
 
             # step
             train_loss.backward()
@@ -242,7 +243,7 @@ def train():
 
             # regularization on convolution layers
             if (args.reg_freq_update is not None) and (param_update_count % args.reg_freq_update == 0):
-                update_conv(model, opt_backbone, opt_fc)
+                update_conv(model, opt_fc)
 
         train_loss = total_train_loss / len(train_set)
         train_acc = total_train_acc / len(train_set)
