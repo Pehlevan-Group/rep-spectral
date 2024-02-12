@@ -209,7 +209,7 @@ class TangentAttack(Attacker):
                     random_noise = torch.zeros_like(x_original).uniform_(
                         self.vmin, self.vmax
                     )
-                else:  # * cifar10 (more efficient sampling)
+                else:  # * cifar10 and transfer learning tasks
                     random_noise = (
                         torch.zeros_like(x_original).uniform_(
                             self.perturb_vmin, self.perturb_vmax
