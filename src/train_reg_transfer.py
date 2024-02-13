@@ -226,6 +226,9 @@ def train():
             features, y_pred_logits = model(X_train)
             train_loss = loss_fn(y_pred_logits, y_train)
 
+            # add hard stop if nan
+            if torch.isnan(train_loss): raise ValueError("loss is nan")
+
             # record
             total_train_loss += train_loss * len(X_train)
             total_train_acc += y_pred_logits.argmax(dim=-1).eq(y_train).sum()
