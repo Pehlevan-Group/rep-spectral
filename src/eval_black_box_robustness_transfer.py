@@ -15,7 +15,7 @@ import torch.nn as nn
 from torch.utils.data import DataLoader
 
 # load files
-from model import ResNet50Pretrained
+from model import ResNet50Pretrained, TransferWrap
 from utils import load_config, get_logging_name
 
 # ======== legacy arguments =======
@@ -116,15 +116,19 @@ test_loader = DataLoader(test_set, batch_size=args.batch_size, shuffle=False)
 print(f'{args.data} data loaded')
 
 # get model
-model = ResNet50Pretrained(num_classes).to(device)
-model.load_state_dict(
-    torch.load(
-        os.path.join(paths["model_dir"], base_log_name if args.reg == "None" else log_name, f"model_e{args.eval_epoch}.pt"),
-        map_location=device
+def load_model():
+    model_base = ResNet50Pretrained(num_classes).to(device)
+    model_base.load_state_dict(
+        torch.load(
+            os.path.join(paths["model_dir"], base_log_name if args.reg == "None" else log_name, f"model_e{args.eval_epoch}.pt"),
+            map_location=device
+        )
     )
-)
-model.eval()
+    model_base.eval()
+    model = TransferWrap(model_base) # discard feature representations while calling forward
+    return model
 
+model = load_model()
 
 # get attacker
 def get_attacker():
