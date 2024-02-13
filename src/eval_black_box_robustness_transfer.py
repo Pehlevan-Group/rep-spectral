@@ -49,7 +49,7 @@ parser.add_argument('--reg-freq-update', default=None, type=int,
 
 # # iterative singular 
 parser.add_argument('--iterative', action='store_true', default=False, help='True to turn on iterative method')
-parser.add_argument('--tol', default=1e-4, type=float, help='the tolerance for stopping the iterative method')
+parser.add_argument('--eps', default=1e-4, type=float, help='the tolerance for stopping the iterative method')
 parser.add_argument('--max-update', default=1, type=int, help='the maximum update iteration during training')
 
 # logging

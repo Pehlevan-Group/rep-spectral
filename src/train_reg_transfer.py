@@ -57,7 +57,7 @@ parser.add_argument('--reg-freq-update', default=None, type=int,
 
 # # iterative singular 
 parser.add_argument('--iterative', action='store_true', default=False, help='True to turn on iterative method')
-parser.add_argument('--tol', default=1e-4, type=float, help='the tolerance for stopping the iterative method')
+parser.add_argument('--eps', default=1e-4, type=float, help='the tolerance for stopping the iterative method')
 parser.add_argument('--max-update', default=1, type=int, help='the maximum update iteration during training')
 
 # logging
@@ -142,7 +142,7 @@ if args.iterative:
         dump_path = os.path.join(paths["model_dir"], "resnet50pt_224_224_right_v_init")
         os.makedirs(dump_path, exist_ok=True)
         v_init = init_model_right_singular_conv(
-            model, tol=args.tol, h=224, w=224, max_layer=max_layer, 
+            model, tol=args.eps, h=224, w=224, max_layer=max_layer, 
             dump_path=dump_path
         )
 else:
@@ -175,7 +175,7 @@ def update_conv(model: ResNet50Pretrained, opt_fc: optim):
             iterative=args.iterative, 
             v_init=v_init, 
             max_update=args.max_update, 
-            tol=args.tol
+            tol=args.eps
         )
     if "eig-ub" in args.reg:
         if args.max_layer is None:
@@ -189,7 +189,7 @@ def update_conv(model: ResNet50Pretrained, opt_fc: optim):
             iterative=args.iterative, 
             v_init=v_init, 
             max_update=args.max_update,
-            tol=args.tol
+            tol=args.eps
         )
 
 # ================= main driver training functions =================
