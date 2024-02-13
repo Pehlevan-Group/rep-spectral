@@ -1,2 +1,3 @@
-from .MLP import SLP, MLP
-from .regularizers import *
+from .architectures import *
+from .regularizer import *
+from .evaluation import *

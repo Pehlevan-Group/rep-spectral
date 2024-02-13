@@ -182,3 +182,12 @@ config.toml
 
 commands/*
 out/*
+
+# tests
+test_space.py
+
+# experiment record
+record.md
+
+# figs
+fig/

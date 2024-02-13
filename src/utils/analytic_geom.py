@@ -19,6 +19,7 @@ def _derivative_selector(nl: str) -> Callable:
             f"derivative of nl {nl} not implemented in closed-form"
         )
 
+
 def _Sigmoid_analytic_derivative(x: np.ndarray) -> np.ndarray:
     """the analytic derivative of the sigmoid function"""
     nl = lambda x: 1 / (1 + np.exp(-x))
@@ -43,11 +44,11 @@ def determinant_analytic(x: np.ndarray, W: np.ndarray, b: np.ndarray, nl: str):
     z = x @ W.T + b  # number of scans by n
     der_func = _derivative_selector(nl)
     activated_z = der_func(z)
-    activated_square = activated_z ** 2
+    activated_square = activated_z**2
 
     # precompute m
     m = W[:, [0]] @ W[:, [1]].T - W[:, [1]] @ W[:, [0]].T
-    m_squared = m ** 2
+    m_squared = m**2
 
     # O(n^2) einsum enhanced (divided by two since each added twice and diagonal are zeros)
     results = (
@@ -56,4 +57,3 @@ def determinant_analytic(x: np.ndarray, W: np.ndarray, b: np.ndarray, nl: str):
     results = results / n**2
     results = np.sqrt(results)
     return results
-
