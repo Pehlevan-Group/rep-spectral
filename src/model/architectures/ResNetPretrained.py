@@ -11,35 +11,7 @@ import torch
 import torch.nn as nn
 from torchvision.models import resnet50, ResNet50_Weights
 
-from .utils import get_multi_channel_top_eigval_with_stride
-
-
-class Conv2dWrap(nn.Module):
-    """
-    wrap default nn.Conv2d module to change to 'circular' mode and record input shapes
-    """
-
-    def __init__(self, conv: nn.Conv2d):
-        super().__init__()
-        conv.padding_mode = "circular"  # * change to circular
-        self.wrap = conv
-        self._input_shapes = None
-
-    def forward(self, x: torch.Tensor):
-        # register buffer
-        if self._input_shapes is None:
-            self._input_shapes = (x.shape[-2], x.shape[-1])  # (h, w)
-        return self.wrap(x)
-
-    def _get_conv_layer_eigvals(self) -> torch.Tensor:
-        """compute eigvals"""
-        kernel = self.wrap.weight
-        stride = self.wrap.stride[
-            0
-        ]  # * assume square stride, which is True for pretrained resnet 50
-        h, w = self._input_shapes
-        eigval = get_multi_channel_top_eigval_with_stride(kernel, h, w, stride)
-        return eigval
+from .utils import Conv2dWrap
 
 
 class ResNet50Pretrained(nn.Module):

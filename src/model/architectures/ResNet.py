@@ -1,5 +1,5 @@
 """
-PyTorch implementation of ResNet, adapted from https://github.com/kuangliu/pytorch-cifar/blob/master/models/resnet.py
+modified directly from the source code 
 
 the following modifications are made for the project:
 * note that to match with theoretical predictions, all padding are circular instead of zero padding
@@ -10,295 +10,362 @@ the following modifications are made for the project:
 """
 
 # load packages
-from typing import List
+from typing import List, Optional, Callable, Union, Type
 import torch
+from torch import Tensor
 import torch.nn as nn
 
 # load file
-from .utils import get_multi_channel_top_eigval_with_stride, get_output_size
+from .utils import Conv2dWrap
+
+
+def conv3x3(
+    in_planes: int, out_planes: int, stride: int = 1, groups: int = 1, dilation: int = 1
+) -> nn.Conv2d:
+    """3x3 convolution with padding"""
+    return nn.Conv2d(
+        in_planes,
+        out_planes,
+        kernel_size=3,
+        stride=stride,
+        padding=dilation,
+        groups=groups,
+        bias=False,
+        dilation=dilation,
+    )
+
+
+def conv1x1(in_planes: int, out_planes: int, stride: int = 1) -> nn.Conv2d:
+    """1x1 convolution"""
+    return nn.Conv2d(in_planes, out_planes, kernel_size=1, stride=stride, bias=False)
 
 
 class BasicBlock(nn.Module):
-    _expansion = 1
+    expansion: int = 1
 
-    def __init__(self, in_planes, planes, stride=1, nl=nn.GELU()):
-        super(BasicBlock, self).__init__()
-        self.nl = nl
-        self.conv1 = nn.Conv2d(
-            in_planes,
-            planes,
-            kernel_size=3,
-            stride=stride,
-            padding=1,
-            bias=False,
-            padding_mode="circular",
-        )
-        self.bn1 = nn.BatchNorm2d(planes)
-        self.conv2 = nn.Conv2d(
-            planes,
-            planes,
-            kernel_size=3,
-            stride=1,
-            padding=1,
-            bias=False,
-            padding_mode="circular",
-        )
-        self.bn2 = nn.BatchNorm2d(planes)
+    def __init__(
+        self,
+        inplanes: int,
+        planes: int,
+        stride: int = 1,
+        downsample: Optional[nn.Module] = None,
+        groups: int = 1,
+        base_width: int = 64,
+        dilation: int = 1,
+        norm_layer: Optional[Callable[..., nn.Module]] = None,
+    ) -> None:
+        super().__init__()
+        if norm_layer is None:
+            norm_layer = nn.BatchNorm2d
+        if groups != 1 or base_width != 64:
+            raise ValueError("BasicBlock only supports groups=1 and base_width=64")
+        if dilation > 1:
+            raise NotImplementedError("Dilation > 1 not supported in BasicBlock")
+        # Both self.conv1 and self.downsample layers downsample the input when stride != 1
+        self.conv1 = Conv2dWrap(conv3x3(inplanes, planes, stride))
+        self.bn1 = norm_layer(planes)
+        self.relu = nn.ReLU(inplace=True)
+        self.conv2 = Conv2dWrap(conv3x3(planes, planes))
+        self.bn2 = norm_layer(planes)
+        self.downsample = downsample
+        self.stride = stride
 
-        self.shortcut = nn.Sequential()
-        if stride != 1 or in_planes != self._expansion * planes:
-            self.shortcut = nn.Sequential(
-                nn.Conv2d(
-                    in_planes,
-                    self._expansion * planes,
-                    kernel_size=1,
-                    stride=stride,
-                    bias=False,
-                    padding_mode="circular",
-                ),
-                nn.BatchNorm2d(self._expansion * planes),
-            )
+    def forward(self, x: Tensor) -> Tensor:
+        identity = x
 
-        # for forward to ducktype
-        self.input_shapes = None
+        out = self.conv1(x)
+        out = self.bn1(out)
+        out = self.relu(out)
 
-    def forward(self, x):
-        if self.input_shapes is None:
-            self._get_conv_input_shapes(x.shape[-2], x.shape[-1])
+        out = self.conv2(out)
+        out = self.bn2(out)
 
-        out = self.nl(self.bn1(self.conv1(x)))
-        out = self.bn2(self.conv2(out))
-        out += self.shortcut(x)
-        out = self.nl(out)
+        if self.downsample is not None:
+            identity = self.downsample(x)
+
+        out += identity
+        out = self.relu(out)
+
         return out
-
-    # ----- for computing eigenvalues of convolution layers --------
-    def _get_conv_input_shapes(self, h: int, w: int) -> None:
-        """
-        infer the shapes of the input to each convolution layer
-        :param h, w: h, w are the input shape of the forward method (i.e. the input of the first conv)
-        """
-        result_list = [(h, w)]
-
-        # after conv1
-        h, w = get_output_size(h, w, self.conv1)
-        result_list.append((h, w))
-
-        # after conv2
-        for layer in self.shortcut:
-            if isinstance(layer, nn.Conv2d):
-                result_list.append(result_list[0])  # replicate original input shapes
-
-        # ducktype
-        self.input_shapes = result_list
-
-    def get_conv_layer_eigvals(self) -> List[torch.Tensor]:
-        """return a list of eigenvalues of each convolution layer"""
-        conv_layers = [self.conv1, self.conv2]
-        # add shortcut layer
-        for layer in self.shortcut:
-            if isinstance(layer, nn.Conv2d):
-                conv_layers.append(layer)
-
-        # get eigenvalues
-        eigs = []
-        for (h, w), conv_layer in zip(self.input_shapes, conv_layers):
-            kernel = conv_layer.weight
-            stride = conv_layer.stride[0]  # * assume square stride
-            eigval = get_multi_channel_top_eigval_with_stride(kernel, h, w, stride)
-            eigs.append(eigval)
-
-        return eigs
 
 
 class Bottleneck(nn.Module):
-    _expansion = 4
+    # Bottleneck in torchvision places the stride for downsampling at 3x3 convolution(self.conv2)
+    # while original implementation places the stride at the first 1x1 convolution(self.conv1)
+    # according to "Deep residual learning for image recognition" https://arxiv.org/abs/1512.03385.
+    # This variant is also known as ResNet V1.5 and improves accuracy according to
+    # https://ngc.nvidia.com/catalog/model-scripts/nvidia:resnet_50_v1_5_for_pytorch.
 
-    def __init__(self, in_planes, planes, stride=1, nl=nn.GELU()):
-        super(Bottleneck, self).__init__()
-        self.nl = nl
-        self.conv1 = nn.Conv2d(
-            in_planes, planes, kernel_size=1, bias=False, padding_mode="circular"
-        )
-        self.bn1 = nn.BatchNorm2d(planes)
-        self.conv2 = nn.Conv2d(
-            planes,
-            planes,
-            kernel_size=3,
-            stride=stride,
-            padding=1,
-            bias=False,
-            padding_mode="circular",
-        )
-        self.bn2 = nn.BatchNorm2d(planes)
-        self.conv3 = nn.Conv2d(
-            planes,
-            self._expansion * planes,
-            kernel_size=1,
-            bias=False,
-            padding_mode="circular",
-        )
-        self.bn3 = nn.BatchNorm2d(self._expansion * planes)
+    expansion: int = 4
 
-        self.shortcut = nn.Sequential()
-        if stride != 1 or in_planes != self._expansion * planes:
-            self.shortcut = nn.Sequential(
-                nn.Conv2d(
-                    in_planes,
-                    self._expansion * planes,
-                    kernel_size=1,
-                    stride=stride,
-                    bias=False,
-                    padding_mode="circular",
-                ),
-                nn.BatchNorm2d(self._expansion * planes),
-            )
+    def __init__(
+        self,
+        inplanes: int,
+        planes: int,
+        stride: int = 1,
+        downsample: Optional[nn.Module] = None,
+        groups: int = 1,
+        base_width: int = 64,
+        dilation: int = 1,
+        norm_layer: Optional[Callable[..., nn.Module]] = None,
+    ) -> None:
+        super().__init__()
+        if norm_layer is None:
+            norm_layer = nn.BatchNorm2d
+        width = int(planes * (base_width / 64.0)) * groups
+        # Both self.conv2 and self.downsample layers downsample the input when stride != 1
+        self.conv1 = Conv2dWrap(conv1x1(inplanes, width))
+        self.bn1 = norm_layer(width)
+        self.conv2 = Conv2dWrap(conv3x3(width, width, stride, groups, dilation))
+        self.bn2 = norm_layer(width)
+        self.conv3 = Conv2dWrap(conv1x1(width, planes * self.expansion))
+        self.bn3 = norm_layer(planes * self.expansion)
+        self.relu = nn.ReLU(inplace=True)
+        self.downsample = downsample
+        self.stride = stride
 
-        # to be ducktyped
-        self.input_shapes = None
+    def forward(self, x: Tensor) -> Tensor:
+        identity = x
 
-    def forward(self, x):
-        if self.input_shapes is None:
-            self._get_conv_input_shapes()
+        out = self.conv1(x)
+        out = self.bn1(out)
+        out = self.relu(out)
 
-        out = self.nl(self.bn1(self.conv1(x)))
-        out = self.nl(self.bn2(self.conv2(out)))
-        out = self.bn3(self.conv3(out))
-        out += self.shortcut(x)
-        out = self.nl(out)
+        out = self.conv2(out)
+        out = self.bn2(out)
+        out = self.relu(out)
+
+        out = self.conv3(out)
+        out = self.bn3(out)
+
+        if self.downsample is not None:
+            identity = self.downsample(x)
+
+        out += identity
+        out = self.relu(out)
+
         return out
-
-    # ----- for computing eigenvalues of convolution layers --------
-    def _get_conv_input_shapes(self, h: int, w: int) -> None:
-        """
-        infer the shapes of the input to each convolution layer
-        :param h, w: h, w are the input shape of the forward method (i.e. the input of the first conv)
-        """
-        result_list = [(h, w)]
-
-        # after conv1
-        h, w = get_output_size(h, w, self.conv1)
-        result_list.append((h, w))
-
-        # after conv2
-        h, w = get_output_size(h, w, self.conv2)
-        result_list.append((h, w))
-
-        # after conv3
-        for layer in self.shortcut:
-            if isinstance(layer, nn.Conv2d):
-                result_list.append(result_list[0])  # replicate original input shapes
-
-        # ducktype
-        self.input_shapes = result_list
-
-    def get_conv_layer_eigvals(self) -> List[torch.Tensor]:
-        """return a list of eigenvalues of each convolution layer"""
-        conv_layers = [self.conv1, self.conv2, self.conv3]
-        # add shortcut layer
-        for layer in self.shortcut:
-            if isinstance(layer, nn.Conv2d):
-                conv_layers.append(layer)
-
-        # get eigenvalues
-        eigs = []
-        for (h, w), conv_layer in zip(self.input_shapes, conv_layers):
-            kernel = conv_layer.weight
-            stride = conv_layer.stride[0]  # * assume square stride
-            eigval = get_multi_channel_top_eigval_with_stride(kernel, h, w, stride)
-            eigs.append(eigval)
-
-        return eigs
 
 
 class ResNet(nn.Module):
-    def __init__(self, block, num_blocks, num_classes=10, nl=nn.GELU()):
-        super(ResNet, self).__init__()
-        self.nl = nl
-        self.in_planes = 64
+    def __init__(
+        self,
+        block: Type[Union[BasicBlock, Bottleneck]],
+        layers: List[int],
+        num_classes: int = 1000,
+        zero_init_residual: bool = False,
+        groups: int = 1,
+        width_per_group: int = 64,
+        replace_stride_with_dilation: Optional[List[bool]] = None,
+        norm_layer: Optional[Callable[..., nn.Module]] = None,
+    ) -> None:
+        super().__init__()
+        if norm_layer is None:
+            norm_layer = nn.BatchNorm2d
+        self._norm_layer = norm_layer
 
-        self.conv1 = nn.Conv2d(
-            3,
-            64,
-            kernel_size=3,
-            stride=1,
-            padding=1,
-            bias=False,
-            padding_mode="circular",
+        self.inplanes = 64
+        self.dilation = 1
+        if replace_stride_with_dilation is None:
+            # each element in the tuple indicates if we should replace
+            # the 2x2 stride with a dilated convolution instead
+            replace_stride_with_dilation = [False, False, False]
+        if len(replace_stride_with_dilation) != 3:
+            raise ValueError(
+                "replace_stride_with_dilation should be None "
+                f"or a 3-element tuple, got {replace_stride_with_dilation}"
+            )
+        self.groups = groups
+        self.base_width = width_per_group
+        self.conv1 = Conv2dWrap(
+            nn.Conv2d(3, self.inplanes, kernel_size=7, stride=2, padding=3, bias=False)
         )
-        self.bn1 = nn.BatchNorm2d(64)
-
-        self.num_blocks = num_blocks  # * for truncating regularization
-        self._get_eigvals_funcs = (
-            []
-        )  # * store get eigenvalue functions binding to the instances
-        self.layer1 = self._make_layer(block, 64, num_blocks[0], stride=1)
-        self.layer2 = self._make_layer(block, 128, num_blocks[1], stride=2)
-        self.layer3 = self._make_layer(block, 256, num_blocks[2], stride=2)
-        self.layer4 = self._make_layer(block, 512, num_blocks[3], stride=2)
-        self.linear = nn.Linear(512 * block._expansion, num_classes)
-
-        self.pooling = nn.AvgPool2d(4)
-
-        # for geometric quantity computation purpose
-        self.feature_map = nn.Sequential(
-            self.conv1,
-            self.bn1,
-            self.nl,
-            self.layer1,
-            self.layer2,
-            self.layer3,
-            self.layer4,
-            self.pooling,
-            nn.Flatten(start_dim=1),  # take the place of view
+        self.bn1 = norm_layer(self.inplanes)
+        self.relu = nn.ReLU(inplace=True)
+        self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
+        self.layer1 = self._make_layer(block, 64, layers[0])
+        self.layer2 = self._make_layer(
+            block, 128, layers[1], stride=2, dilate=replace_stride_with_dilation[0]
         )
+        self.layer3 = self._make_layer(
+            block, 256, layers[2], stride=2, dilate=replace_stride_with_dilation[1]
+        )
+        self.layer4 = self._make_layer(
+            block, 512, layers[3], stride=2, dilate=replace_stride_with_dilation[2]
+        )
+        self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
+        self.fc = nn.Linear(512 * block.expansion, num_classes)
 
-    def _make_layer(self, block, planes, num_blocks, stride):
-        strides = [stride] + [1] * (num_blocks - 1)
+        for m in self.modules():
+            if isinstance(m, Conv2dWrap):
+                nn.init.kaiming_normal_(m.weight, mode="fan_out", nonlinearity="relu")
+            elif isinstance(m, (nn.BatchNorm2d, nn.GroupNorm)):
+                nn.init.constant_(m.weight, 1)
+                nn.init.constant_(m.bias, 0)
+
+        # Zero-initialize the last BN in each residual branch,
+        # so that the residual branch starts with zeros, and each residual block behaves like an identity.
+        # This improves the model by 0.2~0.3% according to https://arxiv.org/abs/1706.02677
+        if zero_init_residual:
+            for m in self.modules():
+                if isinstance(m, Bottleneck) and m.bn3.weight is not None:
+                    # type: ignore[arg-type]
+                    nn.init.constant_(m.bn3.weight, 0)
+                elif isinstance(m, BasicBlock) and m.bn2.weight is not None:
+                    # type: ignore[arg-type]
+                    nn.init.constant_(m.bn2.weight, 0)
+
+    def _make_layer(
+        self,
+        block: Type[Union[BasicBlock, Bottleneck]],
+        planes: int,
+        blocks: int,
+        stride: int = 1,
+        dilate: bool = False,
+    ) -> nn.Sequential:
+        norm_layer = self._norm_layer
+        downsample = None
+        previous_dilation = self.dilation
+        if dilate:
+            self.dilation *= stride
+            stride = 1
+        if stride != 1 or self.inplanes != planes * block.expansion:
+            downsample = nn.Sequential(
+                Conv2dWrap(conv1x1(self.inplanes, planes * block.expansion, stride)),
+                norm_layer(planes * block.expansion),
+            )
+
         layers = []
-        for stride in strides:
-            cur_layer = block(self.in_planes, planes, stride, nl=self.nl)
-            layers.append(cur_layer)
-            self.in_planes = planes * block._expansion
-
-            # add eigen binding function
-            self._get_eigvals_funcs.append(cur_layer.get_conv_layer_eigvals)
+        layers.append(
+            block(
+                self.inplanes,
+                planes,
+                stride,
+                downsample,
+                self.groups,
+                self.base_width,
+                previous_dilation,
+                norm_layer,
+            )
+        )
+        self.inplanes = planes * block.expansion
+        for _ in range(1, blocks):
+            layers.append(
+                block(
+                    self.inplanes,
+                    planes,
+                    groups=self.groups,
+                    base_width=self.base_width,
+                    dilation=self.dilation,
+                    norm_layer=norm_layer,
+                )
+            )
 
         return nn.Sequential(*layers)
 
-    def forward(self, x):
-        out = self.feature_map(x)
-        out = self.linear(out)
-        return out
+    def _forward_impl(self, x: Tensor) -> Tensor:
+        # See note [TorchScript super()]
+        x = self.conv1(x)
+        x = self.bn1(x)
+        x = self.relu(x)
+        x = self.maxpool(x)
 
-    # --------- for conv layer eigenvalues ----------
-    def get_conv_layer_eigvals(self, max_layer: int = 4) -> List[torch.Tensor]:
-        """get convolution layer regularization up to and including `max_layer`"""
+        x = self.layer1(x)
+        x = self.layer2(x)
+        x = self.layer3(x)
+        x = self.layer4(x)
+
+        x = self.avgpool(x)
+        x = torch.flatten(x, 1)
+        x = self.fc(x)
+
+        return x
+
+    def forward(self, x: Tensor) -> Tensor:
+        return self._forward_impl(x)
+
+    # ------- for regularization ---------
+    def _chain_generators(*generators):
+        """chain multiple named_parameter generators"""
+        for gen in generators:
+            yield from gen
+
+    def get_conv_layers(self, max_layer: int = 4) -> List[Conv2dWrap]:
         assert max_layer in [1, 2, 3, 4], f"max_layer {max_layer} not in [1, 2, 3, 4]"
-        num_conv_layers = sum(self.num_blocks[:max_layer])
-        result_list = []
 
-        # get eigvals up to truncated number of convolution layers
-        for func in self._get_eigvals_funcs[:num_conv_layers]:
-            result_list += func()
+        # pre block conv layer
+        conv_layers = [self.conv1]
+
+        # each layer
+        generator_list = []
+        if max_layer >= 1:
+            generator_list.append(self.layer1.named_modules())
+        if max_layer >= 2:
+            generator_list.append(self.layer2.named_modules())
+        if max_layer >= 3:
+            generator_list.append(self.layer3.named_modules())
+        if max_layer >= 4:
+            generator_list.append(self.layer4.named_modules())
+        aggregated_generator = self._chain_generators(*generator_list)
+
+        # retrieve conv2dtype
+        for name, m in aggregated_generator:
+            if isinstance(m, Conv2dWrap):
+                conv_layers.append(m)
+
+        return conv_layers
+
+    def get_conv_layer_eigvals(self, max_layer: int = 4) -> List[torch.Tensor]:
+        """get list of eigenvalues"""
+        result_list = []
+        conv_layers = self.get_conv_layers(max_layer=max_layer)
+        for conv_layer in conv_layers:
+            result_list.append(conv_layer._get_conv_layer_eigvals())
+
         return result_list
 
+    def get_conv_layers_names(self, max_layer: int = 4) -> List[str]:
+        """use string to store convolution layer right singular vector"""
+        assert max_layer in [1, 2, 3, 4], f"max_layer {max_layer} not in [1, 2, 3, 4]"
+        names = [
+            name
+            for (name, _) in list(self.named_parameters())
+            if "conv" in name or "downsample.0" in name
+        ]
 
-def ResNet18(nl=nn.GELU()):
-    return ResNet(BasicBlock, [2, 2, 2, 2], nl=nl)
+        # filter out
+        if max_layer < 4:
+            names = [name for name in names if "layer4" not in name]
+        if max_layer < 3:
+            names = [name for name in names if "layer3" not in name]
+        if max_layer < 2:
+            names = [name for name in names if "layer2" not in name]
+
+        # replace "." with "_"
+        names = [name.replace(".", "_") for name in names]
+        return names
 
 
-def ResNet34(nl=nn.GELU()):
-    return ResNet(BasicBlock, [3, 4, 6, 3], nl=nl)
+# TODO: register l2sp buffer snapshots
+# TODO: currently the nl api is fake
 
 
-def ResNet50(nl=nn.GELU()):
-    return ResNet(Bottleneck, [3, 4, 6, 3], nl=nl)
+# ========== concrete initializations ========
+def ResNet18(num_classes=10, nl=nn.GELU()):
+    return ResNet(BasicBlock, [2, 2, 2, 2], num_classes=num_classes)
 
 
-def ResNet101(nl=nn.GELU()):
-    return ResNet(Bottleneck, [3, 4, 23, 3], nl=nl)
+def ResNet34(num_classes=10, nl=nn.GELU()):
+    return ResNet(BasicBlock, [3, 4, 6, 3], num_classes=num_classes)
 
 
-def ResNet152(nl=nn.GELU()):
-    return ResNet(Bottleneck, [3, 8, 36, 3], nl=nl)
+def ResNet50(num_classes=10, nl=nn.GELU()):
+    return ResNet(Bottleneck, [3, 4, 6, 3], num_classes=num_classes)
+
+
+def ResNet101(num_classes=10, nl=nn.GELU()):
+    return ResNet(Bottleneck, [3, 4, 23, 3], num_classes=num_classes)
+
+
+def ResNet152(num_classes=10, nl=nn.GELU()):
+    return ResNet(Bottleneck, [3, 8, 36, 3], num_classes=num_classes)

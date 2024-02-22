@@ -136,7 +136,6 @@ def top_eig_ub_transfer_update(
 
 def spectral_ub_transfer_update(
     model: nn.Module,
-    opt_fc: optim,
     max_layer: int = 4,
     lam: float = 0.01,
     iterative=True,
@@ -146,7 +145,6 @@ def spectral_ub_transfer_update(
 ):
     """
     compute eigenvalues and update for each convolution layers, and last connection layer
-    :param opt_fc: the optimizer for the last layer
     """
     # eigenvalues
     top_eig_ub_transfer_update(
@@ -159,10 +157,12 @@ def spectral_ub_transfer_update(
         tol=tol,
     )
 
-    # last layer norm
+    # last layer norm update
     W = model.fc.weight
     eig = torch.linalg.eigvalsh(W.T @ W).max()
     eig_loss = eig * lam
-    opt_fc.zero_grad()
+    model.fc.zero_grad()
     eig_loss.backward()
-    opt_fc.step()
+    last_layer_grad = W.grad
+    with torch.no_grad():
+        model.fc.weight.copy_(W - last_layer_grad)

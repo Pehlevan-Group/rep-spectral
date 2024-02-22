@@ -68,7 +68,20 @@ def get_logging_name(args, mode: str) -> List[str]:
         )
 
     # ================ transfer learning =================
-    elif mode == "transfer":
+    elif mode == 'transfer':
+        base_log_name = (
+            f"{args.data}_m{args.model}_bs{args.batch_size}_lr{args.lr}_opt{args.opt}_wd{args.wd}"
+            + f"_mom{args.mom}_nl{args.nl}_regNone_e{args.epochs}_seed{args.seed}"
+        )
+        log_name = (
+            f"{args.data}_m{args.model}_bs{args.batch_size}_lr{args.lr}_opt{args.opt}_wd{args.wd}"
+            + f"_mom{args.mom}_nl{args.nl}_lam{args.lam}_reg{reg_name}"
+            + f"_e{args.epochs}_b{args.burnin}_seed{args.seed}_rf{args.reg_freq}"
+            + (f"_ru{args.reg_freq_update}" if args.reg_freq_update is not None else "")
+            + (f"_ml{args.max_layer}" if args.max_layer is not None else "")
+        )
+
+    elif mode == "finetune":
         reg_name = str(reg_name)
         # add iterative
         if ("spectral" in args.reg or "eig-ub" in args.reg) and args.iterative:

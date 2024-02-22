@@ -77,3 +77,32 @@ def get_output_size(input_h: int, input_w: int, conv: nn.Conv2d) -> Tuple[int]:
     output_w = int((input_w + 2 * pad_w - dilation_w * (k_w - 1) + 1) / stride_w + 1)
 
     return output_h, output_w
+
+
+# ======================= conv wrapper =============================
+class Conv2dWrap(nn.Module):
+    """
+    wrap default nn.Conv2d module to change to 'circular' mode and record input shapes
+    """
+
+    def __init__(self, conv: nn.Conv2d):
+        super().__init__()
+        conv.padding_mode = "circular"  # * change to circular
+        self.wrap = conv
+        self._input_shapes = None
+
+    def forward(self, x: torch.Tensor):
+        # register buffer
+        if self._input_shapes is None:
+            self._input_shapes = (x.shape[-2], x.shape[-1])  # (h, w)
+        return self.wrap(x)
+
+    def _get_conv_layer_eigvals(self) -> torch.Tensor:
+        """compute eigvals"""
+        kernel = self.wrap.weight
+        stride = self.wrap.stride[
+            0
+        ]  # * assume square stride, which is True for pretrained resnet 50
+        h, w = self._input_shapes
+        eigval = get_multi_channel_top_eigval_with_stride(kernel, h, w, stride)
+        return eigval

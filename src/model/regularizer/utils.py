@@ -259,7 +259,7 @@ def init_model_right_singular_conv(
 
     v_init_by_conv = {}
     # if initial guesses already available, read
-    if dump_path is not None and len(os.listdir(dump_path)) == 53:
+    if dump_path is not None and len(os.listdir(dump_path)) == len(conv_layers_names):
         for name in conv_layers_names:
             v_load_path = os.path.join(dump_path, name + ".pt")
             v_init_by_conv[name] = torch.load(

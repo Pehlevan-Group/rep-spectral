@@ -88,7 +88,7 @@ if args.reg_freq_update is not None:
     assert args.reg_freq == 1, f"reg_freq_update{args.reg_freq_update} & reg_freq{args.reg_freq} not compatible"
 
 # set up summary writer
-log_name, base_log_name = get_logging_name(args, 'transfer')
+log_name, base_log_name = get_logging_name(args, 'finetune')
 
 # load data
 def load_data():
