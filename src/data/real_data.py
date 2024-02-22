@@ -3,6 +3,8 @@ collection of real dataset
 - MNIST
 - FashionMNIST
 - CIFAR10
+- CIFAR100
+- Imangenette
 """
 
 # load packages
@@ -146,3 +148,64 @@ def random_samples_by_targets(dataset, targets=[7, 6], seed=42):
             data, target = dataset[random_index]
         samples.append(data)
     return samples
+
+
+# =================== CIFAR 100 ===================
+def cifar100(data_path):
+    """load (download if necessary) cifar100"""
+    transform_train = transforms.Compose(
+        [
+            transforms.RandomCrop(32, padding=4),
+            transforms.RandomHorizontalFlip(),
+            transforms.ToTensor(),
+            transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
+        ]
+    )
+
+    transform_test = transforms.Compose(
+        [
+            transforms.ToTensor(),
+            transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
+        ]
+    )
+
+    trainset = torchvision.datasets.CIFAR100(
+        root=data_path, train=True, download=True, transform=transform_train
+    )
+
+    testset = torchvision.datasets.CIFAR100(
+        root=data_path, train=False, download=True, transform=transform_test
+    )
+
+    return trainset, testset
+
+
+# =================== imagenette ===================
+def imagenette(data_path):
+    """load (download if necessary) imagenette"""
+    # specify transformations
+    normalization = transforms.Normalize(
+        mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]
+    )
+    transform_train = transforms.Compose(
+        [
+            transforms.RandomResizedCrop(224, ratio=(1, 1.3)),
+            transforms.RandomHorizontalFlip(),
+            transforms.ToTensor(),
+            normalization,
+        ]
+    )
+    transform_test = transforms.Compose(
+        [transforms.Resize((224, 224)), transforms.ToTensor(), normalization]
+    )
+
+    # get dataset
+    trainset = torchvision.datasets.Imagenette(
+        root=data_path, split="train", download=True, transform=transform_train
+    )
+
+    testset = torchvision.datasets.Imagenette(
+        root=data_path, split="val", download=True, transform=transform_test
+    )
+
+    return trainset, testset
