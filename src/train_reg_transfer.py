@@ -206,7 +206,7 @@ def train():
                 total_test_loss, total_test_acc = 0, 0
                 for X_test, y_test in test_loader:
                     X_test, y_test = X_test.to(device), y_test.to(device)
-                    _, y_test_pred_logits = model(X_test)
+                    y_test_pred_logits = model(X_test)
                     test_loss = loss_fn(y_test_pred_logits, y_test)
 
                     total_test_loss += test_loss * len(X_test)
