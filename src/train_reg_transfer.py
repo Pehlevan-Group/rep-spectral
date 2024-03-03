@@ -23,7 +23,8 @@ from model import (
     ResNet18, ResNet34, ResNet50, ResNet101, ResNet152,
     top_eig_ub_transfer_update,
     spectral_ub_transfer_update,
-    init_model_right_singular_conv
+    init_model_right_singular_conv,
+    WarmUpLR
 )
 from utils import load_config, get_logging_name
 
@@ -36,12 +37,13 @@ parser.add_argument("--data", default='cifar100', type=str, help='training data'
 parser.add_argument('--model', default='34', type=str, help="resnet model number", choices=["18", "34", "50", "101", "152"])
 
 # training
-parser.add_argument('--batch-size', default=1024, type=int, help='the batchsize for training')
+parser.add_argument('--batch-size', default=128, type=int, help='the batchsize for training')
 parser.add_argument('--lr', default=0.01, type=float, help='learning rate for the last layer')
 parser.add_argument("--nl", default='GELU', type=str, help='the nonlinearity throughout')
 parser.add_argument("--opt", default='SGD', type=str, help='the type of optimizer')
 parser.add_argument("--wd", default=0, type=float, help='weight decay')
 parser.add_argument('--mom', default=0.9, type=float, help='the momentum')
+parser.add_argument("--warm", default=1, type=int, help='the number of epochs for lr warmup')
 parser.add_argument('--lam', default=1e-4, type=float, help='the multiplier / strength of regularization')
 parser.add_argument("--max-layer", default=None, type=int, 
                     help='the number of layers to regularize in ResNet architecture; None to regularize all'
@@ -107,7 +109,9 @@ model = eval(f"ResNet{args.model}")(num_classes=num_classes).to(device)
 
 # get optimizer 
 opt = getattr(optim, args.opt)(model.parameters(), lr=args.lr, weight_decay=args.wd, momentum=args.mom)
-# scheduler = optim.lr_scheduler.CosineAnnealingLR(opt, T_max=280)
+train_scheduler = optim.lr_scheduler.MultiStepLR(opt, milestones=[60, 120, 160], gamma=0.2)
+iter_per_epoch = len(train_loader)
+warmup_scheduler = WarmUpLR(opt, iter_per_epoch * args.warm)
 
 # =================== regularization updates =====================
 def update_conv(model, v_init):
@@ -169,6 +173,10 @@ def train():
 
     # training
     for i in pbar:
+        # lr scheduler
+        if i >= args.warm:
+            train_scheduler.step(i)
+
         model.train()
         total_train_loss, total_train_acc = 0, 0
         for param_update_count, (X_train, y_train) in enumerate(train_loader):
@@ -191,6 +199,9 @@ def train():
             # regularization on convolution layers
             if (args.reg_freq_update is not None) and (param_update_count % args.reg_freq_update == 0):
                 update_conv(model, v_init)
+            
+            # warmup scheduler
+            if i < args.warm: warmup_scheduler.step()
 
         # scheduler.step()
         train_loss = total_train_loss / len(train_set)
