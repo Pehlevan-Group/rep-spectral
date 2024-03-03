@@ -44,6 +44,7 @@ parser.add_argument("--opt", default='SGD', type=str, help='the type of optimize
 parser.add_argument("--wd", default=0, type=float, help='weight decay')
 parser.add_argument('--mom', default=0.9, type=float, help='the momentum')
 parser.add_argument("--warm", default=1, type=int, help='the number of epochs for lr warmup')
+parser.add_argument("--milestone", default=[60, 120, 160], type=int, nargs='+', help='the epoch to change learning rate')
 parser.add_argument('--lam', default=1e-4, type=float, help='the multiplier / strength of regularization')
 parser.add_argument("--max-layer", default=None, type=int, 
                     help='the number of layers to regularize in ResNet architecture; None to regularize all'
@@ -109,7 +110,7 @@ model = eval(f"ResNet{args.model}")(num_classes=num_classes).to(device)
 
 # get optimizer 
 opt = getattr(optim, args.opt)(model.parameters(), lr=args.lr, weight_decay=args.wd, momentum=args.mom)
-train_scheduler = optim.lr_scheduler.MultiStepLR(opt, milestones=[60, 120, 160], gamma=0.2)
+train_scheduler = optim.lr_scheduler.MultiStepLR(opt, milestones=args.milestone, gamma=0.2)
 iter_per_epoch = len(train_loader)
 warmup_scheduler = WarmUpLR(opt, iter_per_epoch * args.warm)
 
