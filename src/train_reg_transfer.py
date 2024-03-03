@@ -107,6 +107,7 @@ model = eval(f"ResNet{args.model}")(num_classes=num_classes).to(device)
 
 # get optimizer 
 opt = getattr(optim, args.opt)(model.parameters(), lr=args.lr, weight_decay=args.wd, momentum=args.mom)
+# scheduler = optim.lr_scheduler.CosineAnnealingLR(opt, T_max=280)
 
 # =================== regularization updates =====================
 def update_conv(model, v_init):
@@ -191,6 +192,7 @@ def train():
             if (args.reg_freq_update is not None) and (param_update_count % args.reg_freq_update == 0):
                 update_conv(model, v_init)
 
+        # scheduler.step()
         train_loss = total_train_loss / len(train_set)
         train_acc = total_train_acc / len(train_set)
 

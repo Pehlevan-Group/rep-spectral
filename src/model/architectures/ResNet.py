@@ -178,11 +178,12 @@ class ResNet(nn.Module):
         self.groups = groups
         self.base_width = width_per_group
         self.conv1 = Conv2dWrap(
-            nn.Conv2d(3, self.inplanes, kernel_size=7, stride=2, padding=3, bias=False)
+            # nn.Conv2d(3, self.inplanes, kernel_size=7, stride=2, padding=3, bias=False) # for 224 * 224 inputs
+            nn.Conv2d(3, self.inplanes, kernel_size=3, padding=1, bias=False) # for 32 * 32 inputs
         )
         self.bn1 = norm_layer(self.inplanes)
         self.relu = nn.ReLU(inplace=True)
-        self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
+        # self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
         self.layer1 = self._make_layer(block, 64, layers[0])
         self.layer2 = self._make_layer(
             block, 128, layers[1], stride=2, dilate=replace_stride_with_dilation[0]
@@ -196,24 +197,26 @@ class ResNet(nn.Module):
         self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
         self.fc = nn.Linear(512 * block.expansion, num_classes)
 
-        for m in self.modules():
-            if isinstance(m, Conv2dWrap):
-                nn.init.kaiming_normal_(m.wrap.weight, mode="fan_out", nonlinearity="relu")
-            elif isinstance(m, (nn.BatchNorm2d, nn.GroupNorm)):
-                nn.init.constant_(m.weight, 1)
-                nn.init.constant_(m.bias, 0)
 
-        # Zero-initialize the last BN in each residual branch,
-        # so that the residual branch starts with zeros, and each residual block behaves like an identity.
-        # This improves the model by 0.2~0.3% according to https://arxiv.org/abs/1706.02677
-        if zero_init_residual:
-            for m in self.modules():
-                if isinstance(m, Bottleneck) and m.bn3.weight is not None:
-                    # type: ignore[arg-type]
-                    nn.init.constant_(m.bn3.weight, 0)
-                elif isinstance(m, BasicBlock) and m.bn2.weight is not None:
-                    # type: ignore[arg-type]
-                    nn.init.constant_(m.bn2.weight, 0)
+        # * testing without kaiming_normal initialization
+        # for m in self.modules():
+        #     if isinstance(m, Conv2dWrap):
+        #         nn.init.kaiming_normal_(m.wrap.weight, mode="fan_out", nonlinearity="relu")
+        #     elif isinstance(m, (nn.BatchNorm2d, nn.GroupNorm)):
+        #         nn.init.constant_(m.weight, 1)
+        #         nn.init.constant_(m.bias, 0)
+
+        # # Zero-initialize the last BN in each residual branch,
+        # # so that the residual branch starts with zeros, and each residual block behaves like an identity.
+        # # This improves the model by 0.2~0.3% according to https://arxiv.org/abs/1706.02677
+        # if zero_init_residual:
+        #     for m in self.modules():
+        #         if isinstance(m, Bottleneck) and m.bn3.weight is not None:
+        #             # type: ignore[arg-type]
+        #             nn.init.constant_(m.bn3.weight, 0)
+        #         elif isinstance(m, BasicBlock) and m.bn2.weight is not None:
+        #             # type: ignore[arg-type]
+        #             nn.init.constant_(m.bn2.weight, 0)
 
     def _make_layer(
         self,
@@ -268,7 +271,7 @@ class ResNet(nn.Module):
         x = self.conv1(x)
         x = self.bn1(x)
         x = self.relu(x)
-        x = self.maxpool(x)
+        # x = self.maxpool(x)
 
         x = self.layer1(x)
         x = self.layer2(x)
