@@ -9,6 +9,7 @@ import torch.nn as nn
 from torch.nn.functional import pad
 from torch.optim.lr_scheduler import _LRScheduler
 
+
 def get_multi_channel_top_eigval_with_stride(
     kernel: torch.Tensor, h: int, w: int, stride: int
 ) -> torch.Tensor:
@@ -117,7 +118,6 @@ class WarmUpLR(_LRScheduler):
     """
 
     def __init__(self, optimizer, total_iters, last_epoch=-1):
-
         self.total_iters = total_iters
         super().__init__(optimizer, last_epoch)
 
@@ -126,4 +126,7 @@ class WarmUpLR(_LRScheduler):
         we will use the first m batches, and set the learning
         rate to base_lr * m / total_iters
         """
-        return [base_lr * self.last_epoch / (self.total_iters + 1e-8) for base_lr in self.base_lrs]
+        return [
+            base_lr * self.last_epoch / (self.total_iters + 1e-8)
+            for base_lr in self.base_lrs
+        ]

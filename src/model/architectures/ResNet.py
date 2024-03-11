@@ -179,7 +179,9 @@ class ResNet(nn.Module):
         self.base_width = width_per_group
         self.conv1 = Conv2dWrap(
             # nn.Conv2d(3, self.inplanes, kernel_size=7, stride=2, padding=3, bias=False) # for 224 * 224 inputs
-            nn.Conv2d(3, self.inplanes, kernel_size=3, padding=1, bias=False) # for 32 * 32 inputs
+            nn.Conv2d(
+                3, self.inplanes, kernel_size=3, padding=1, bias=False
+            )  # for 32 * 32 inputs
         )
         self.bn1 = norm_layer(self.inplanes)
         self.relu = nn.ReLU(inplace=True)
@@ -196,10 +198,6 @@ class ResNet(nn.Module):
         )
         self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
         self.fc = nn.Linear(512 * block.expansion, num_classes)
-
-        # add feature map 
-        
-
 
         # * testing without kaiming_normal initialization
         # for m in self.modules():
@@ -269,8 +267,7 @@ class ResNet(nn.Module):
 
         return nn.Sequential(*layers)
 
-    def _forward_impl(self, x: Tensor) -> Tensor:
-        # See note [TorchScript super()]
+    def feature_map(self, x: torch.Tensor) -> Tensor:
         x = self.conv1(x)
         x = self.bn1(x)
         x = self.relu(x)
@@ -283,6 +280,11 @@ class ResNet(nn.Module):
 
         x = self.avgpool(x)
         x = torch.flatten(x, 1)
+        return x
+
+    def _forward_impl(self, x: Tensor) -> Tensor:
+        # See note [TorchScript super()]
+        x = self.feature_map(x)
         x = self.fc(x)
 
         return x
