@@ -197,6 +197,9 @@ class ResNet(nn.Module):
         self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
         self.fc = nn.Linear(512 * block.expansion, num_classes)
 
+        # add feature map 
+        
+
 
         # * testing without kaiming_normal initialization
         # for m in self.modules():

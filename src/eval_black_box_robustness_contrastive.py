@@ -24,6 +24,8 @@ from utils import load_config, get_logging_name
 parser = argparse.ArgumentParser()
 # data
 parser.add_argument("--data", default='sin', type=str, help='data to perform training on')
+parser.add_argument("--target-data", default='cifar10', type=str, 
+    help='the data to be transferred to (for contrastive this is the same as training set, transfer otherwise)')
 parser.add_argument("--step", default=20, type=int, help='the number of steps')
 parser.add_argument("--test-size", default=0.5, type=float, help='the proportion of dataset for testing')
 
@@ -103,11 +105,11 @@ log_name, base_log_name = get_logging_name(args, args.model_type)
 
 # load data
 def load_data():
-    if args.data == "cifar10":
+    if args.target_data == "cifar10":
         from data import cifar10
         train_set, test_set = cifar10(paths['data_dir'])
     else:
-        raise NotImplementedError(f'{args.data} not available')
+        raise NotImplementedError(f'{args.target_data} not available')
     return train_set, test_set
 
 train_set, test_set = load_data()
@@ -115,7 +117,7 @@ train_set, test_set = load_data()
 # batch to dataloader
 train_loader = DataLoader(train_set, batch_size=args.batch_size, shuffle=not args.no_shuffle)
 test_loader = DataLoader(test_set, batch_size=args.batch_size, shuffle=not args.no_shuffle)
-print(f'{args.data} data loaded')
+print(f'{args.target_data} data loaded')
 
 # get model
 def load_model():
@@ -125,7 +127,16 @@ def load_model():
 
     # init model
     from model import ResNet18, ResNet34, ResNet50, ResNet101, ResNet152
-    backbone = eval(f"ResNet{args.model}")(nl=nl).to(device)
+    
+    # get number of classes to load checkpoints
+    if args.data == 'cifar100':
+        num_classes = 100
+    elif args.data == 'cifar10':
+        num_classes = 10
+    else:
+        raise NotImplementedError(f"unrecognized training set {args.data}")
+    
+    backbone = eval(f"ResNet{args.model}")(num_classes=num_classes, nl=nl).to(device)
     if args.model_type == "barlow":
         model_base = BarlowTwins(backbone, args.batch_size, args.projector, args.lambd, nl=nl).to(device)
     elif args.model_type == 'simclr':
