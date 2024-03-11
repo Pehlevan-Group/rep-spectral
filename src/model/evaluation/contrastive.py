@@ -138,10 +138,11 @@ class ContrastiveWrap(nn.Module):
         )
 
         # transfer end to end map: feature map + logistic
-        self.transfer_e2e_map = nn.Sequential(
-            contrastive_model.feature_map, LogisticRegressionTorch(lr, device=device)
-        )
+        self.feature_map = contrastive_model.feature_map
+        self.logistic_out = LogisticRegressionTorch(lr, device=device)
 
     @torch.no_grad()
     def forward(self, X: torch.Tensor) -> torch.Tensor:
-        return self.transfer_e2e_map(X)
+        features = self.feature_map(X)
+        out = self.logistic_out(features)
+        return out

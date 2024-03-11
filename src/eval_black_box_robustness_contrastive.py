@@ -16,7 +16,7 @@ import torch.nn as nn
 from torch.utils.data import DataLoader
 
 # load files
-from model import BarlowTwins, SimCLR, ContrastiveWrap
+from model import BarlowTwins, SimCLR, ContrastiveWrap, get_contrastive_acc
 from utils import load_config, get_logging_name
 
 # ======== legacy arguments =======
@@ -231,6 +231,25 @@ def record(dists: List[float]):
 
 @torch.no_grad()
 def main():
+    # for pretrain set different from eval set, we perform an evaluation
+    if args.data != args.target_data:
+        # get train and test labels
+        train_labels, test_labels = [], []
+        for _, labels in train_loader:
+            train_labels.append(labels)
+        for _, labels in test_loader:
+            test_labels.append(labels)
+
+        train_labels = torch.concat(train_labels, dim=0)
+        test_labels = torch.concat(test_labels, dim=0)
+
+        downstream_train_acc, downstream_test_acc = get_contrastive_acc(
+            model, 
+            train_loader, train_labels, test_loader, test_labels, 
+            device=device, random_state=args.seed
+        )
+        print(f"downstream train acc: {downstream_train_acc:.4f}; downstream test acc: {downstream_test_acc:.4f}")
+
     samples, target_samples = get_samples()
     dists = attack_all(samples, target_samples)
     record(dists)
