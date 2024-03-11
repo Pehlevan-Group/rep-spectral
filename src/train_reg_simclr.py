@@ -87,9 +87,9 @@ writer = SummaryWriter(os.path.join(paths['result_dir'], log_name))
 def load_data():
     if args.data == "cifar10":
         train_dataset, unaugmented_train_dataset, test_dataset = cifar10_contrastive(
-            # Barlow style data augmentation
+            # SIMCLR style data augmentation
             paths["data_dir"], 
-            transformation="Barlow"
+            transformation="SimClr"
         )
     else:
         raise NotImplementedError(f"dataset {args.data} not available")
