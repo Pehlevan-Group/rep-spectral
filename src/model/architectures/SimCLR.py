@@ -25,9 +25,9 @@ class SimCLR(nn.Module):
         self.backbone = backbone
         self.feature_map = backbone.feature_map
         # projection head
-        in_feat_dim = backbone.linear.in_features
+        in_feat_dim = backbone.fc.in_features
         self.proj_head = nn.Sequential(
-            nn.Linear(in_feat_dim, in_feat_dim), nl, backbone.linear
+            nn.Linear(in_feat_dim, in_feat_dim), nl, backbone.fc
         )
 
         # prepare

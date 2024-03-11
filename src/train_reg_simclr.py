@@ -169,7 +169,7 @@ def train():
         model.train()
         total_train_loss = 0
         total, correct = 0, 0
-        for param_update_count, (inputs, _) in train_loader:
+        for param_update_count, (inputs, _) in enumerate(train_loader):
             # stack multiple augmentations
             inputs = torch.cat(inputs, dim=0).to(device)
             opt.zero_grad()
