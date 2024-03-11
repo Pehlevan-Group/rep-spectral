@@ -1,5 +1,6 @@
 """
 contrastive evaluation of black box robustness
+also used for simple transfer learning task
 """
 
 # load packages
@@ -129,6 +130,8 @@ def load_model():
         model_base = BarlowTwins(backbone, args.batch_size, args.projector, args.lambd, nl=nl).to(device)
     elif args.model_type == 'simclr':
         model_base = SimCLR(backbone, args.batch_size, nl=nl).to(device)
+    elif args.model_type == 'transfer':
+        model_base = backbone
     else:
         raise NotImplementedError(f"contrastive model type {args.model_type} not available")
     
