@@ -15,16 +15,29 @@ from .utils import Conv2dWrap
 
 
 class ResNet50Pretrained(nn.Module):
-    def __init__(self, num_classes: int = 1000, weights=ResNet50_Weights.IMAGENET1K_V2):
+    def __init__(
+        self,
+        num_classes: int = 1000,
+        weights=ResNet50_Weights.IMAGENET1K_V2,
+        small_conv1: bool = False,
+    ):
         """
         default to v2, the one with higher top-1 accuracy
         :param num_classes: the number of classes for the final linear layer
         :param weights: the version of weights to use for ResNet50
+        :param small_conv1: change the input conv1 to kernel size of 3 (for small dimensional dataset such as cifar10)
         """
         super().__init__()
 
         # load pretrained weights on ImageNet
         model = resnet50(weights=weights)
+
+        # adapt to smaller dimensional task (e.g. cifar10)
+        self.small_conv1 = small_conv1
+        if small_conv1:
+            model.conv1 = nn.Conv2d(
+                3, 64, kernel_size=3, stride=1, padding=1, bias=False
+            )
 
         # modify the linear head
         self.fc = nn.Linear(model.fc.in_features, num_classes, bias=True)
@@ -56,7 +69,11 @@ class ResNet50Pretrained(nn.Module):
 
         # register all parameters as buffers
         for name, parameter in snapshot.named_parameters():
-            if name != "fc.weight" and name != "fc.bias":
+            if (
+                name != "fc.weight"
+                and name != "fc.bias"
+                and (name != "conv1.weight" or not self.small_conv1)
+            ):
                 pt_name = self._get_pt_param_name(name)
                 self.register_buffer(pt_name, parameter, persistent=False)
 
@@ -250,7 +267,7 @@ class ResNet50Pretrained(nn.Module):
         """get references to all convolution layers"""
         assert max_layer in [1, 2, 3, 4], f"max_layer {max_layer} not in [1, 2, 3, 4]"
 
-        conv_layers = self._get_pre_layer_conv()
+        conv_layers = self._get_pre_layer_conv() if not self.small_conv1 else []
         if max_layer >= 1:
             conv_layers += self._get_layer1_conv()
         if max_layer >= 2:
@@ -279,6 +296,10 @@ class ResNet50Pretrained(nn.Module):
         if max_layer < 2:
             names = [name for name in names if "layer2" not in name]
 
+        # remove initial layer if swapped
+        if self.small_conv1:
+            names = [name for name in names if "conv1.wrap.weight" != name]
+
         # replace "." with "_"
         names = [name.replace(".", "_") for name in names]
         return names
@@ -290,6 +311,10 @@ class ResNet50Pretrained(nn.Module):
         """
         loss = 0
         for name, parameter in self.model.named_parameters():
+            # ignore aligning the first input conv1 layer if changed and randomly initialized
+            if name == "conv1.wrap.weight" and self.small_conv1:
+                continue
+
             pt_name = self._get_pt_param_name(name).replace("wrap_", "")
             parameter_pretrained = getattr(self, pt_name)
             loss += torch.sum((parameter - parameter_pretrained) ** 2)

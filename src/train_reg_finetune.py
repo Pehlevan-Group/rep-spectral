@@ -23,7 +23,8 @@ from model import (
     # spectral_ub_transfer
     top_eig_ub_transfer_update,
     spectral_ub_transfer_update,
-    init_model_right_singular_conv
+    init_model_right_singular_conv,
+    Conv2dWrap
 )
 from utils import load_config, get_logging_name
 
@@ -91,19 +92,27 @@ def load_data():
         from data import load_dog
         train_set, test_set = load_dog(paths['data_dir'])
         num_classes = 120
+        h = w = 224
     elif args.data == 'flower':
         from data import load_flower 
         train_set, test_set = load_flower(paths['data_dir'])
         num_classes = 102
+        h = w = 224
     elif args.data == 'indoor':
         from data import load_indoor 
         train_set, test_set = load_indoor(paths['data_dir'])
         num_classes = 67
+        h = w = 224
+    elif args.data == 'cifar10':
+        from data import cifar10
+        train_set, test_set = cifar10(paths['data_dir'])
+        num_classes = 10
+        h = w = 32
     else:
         raise NotImplementedError(f"{args.data} is not available")
-    return train_set, test_set, num_classes
+    return train_set, test_set, num_classes, (h, w)
 
-train_set, test_set, num_classes = load_data()
+train_set, test_set, num_classes, (h, w) = load_data()
 
 # batch to dataloader
 train_loader = DataLoader(train_set, batch_size=args.batch_size, shuffle=True)
@@ -111,7 +120,10 @@ test_loader = DataLoader(test_set, batch_size=args.batch_size * 4, shuffle=False
 print(f'{args.data} data loaded')
 
 # get model
-model = ResNet50Pretrained(num_classes).to(device)
+model = ResNet50Pretrained(
+    num_classes, 
+    small_conv1=args.data=='cifar10' # change 'conv1' layer for small dimensional data
+).to(device)
 
 # get optimizer 
 # backbone parameters
@@ -139,10 +151,10 @@ if args.iterative:
             max_layer = 4
         
         # set up initial guess dump path
-        dump_path = os.path.join(paths["model_dir"], "resnet50pt_224_224_right_v_init")
+        dump_path = os.path.join(paths["model_dir"], f"resnet50pt_{h}_{w}_right_v_init")
         os.makedirs(dump_path, exist_ok=True)
         v_init = init_model_right_singular_conv(
-            model, tol=args.eps, h=224, w=224, max_layer=max_layer, 
+            model, tol=args.eps, h=h, w=w, max_layer=max_layer, 
             dump_path=dump_path
         )
 else:
