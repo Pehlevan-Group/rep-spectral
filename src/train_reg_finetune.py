@@ -23,8 +23,7 @@ from model import (
     # spectral_ub_transfer
     top_eig_ub_transfer_update,
     spectral_ub_transfer_update,
-    init_model_right_singular_conv,
-    Conv2dWrap
+    init_model_right_singular_conv
 )
 from utils import load_config, get_logging_name
 
