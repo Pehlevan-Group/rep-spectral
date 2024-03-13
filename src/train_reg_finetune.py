@@ -40,6 +40,7 @@ parser.add_argument('--batch-size', default=64, type=int, help='the batchsize fo
 parser.add_argument('--lr', default=0.01, type=float, help='learning rate for the last layer')
 parser.add_argument("--nl", default='GELU', type=str, help='the nonlinearity throughout')
 parser.add_argument("--opt", default='SGD', type=str, help='the type of optimizer')
+parser.add_argument("--wd", default=0., type=float, help='the weight decay overall')
 parser.add_argument('--mom', default=0.9, type=float, help='the momentum')
 parser.add_argument('--alpha', default=0.1, type=float, help='strength of l2sp')
 parser.add_argument('--beta', default=0.01, type=float, help='strength for l2-norm new head in transfer architecture')
@@ -129,7 +130,7 @@ model = ResNet50Pretrained(
 opt_backbone = getattr(optim, args.opt)(
     model.model.parameters(), 
     lr=args.lr / 10,  # * much smaller learning rate for the pretraiend layers
-    weight_decay=0., 
+    weight_decay=args.wd, 
     momentum=args.mom
 )
 # fully connected linear head
@@ -137,7 +138,7 @@ opt_fc = getattr(optim, args.opt)(
     model.fc.parameters(), 
     lr=args.lr, 
     momentum=args.mom, 
-    weight_decay=0.
+    weight_decay=args.wd
 )
 
 # init model singular values if using power iteration
