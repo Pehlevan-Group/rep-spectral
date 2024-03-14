@@ -32,6 +32,7 @@ parser.add_argument('--batch-size', default=64, type=int, help='the batchsize fo
 parser.add_argument('--lr', default=0.01, type=float, help='learning rate for the last layer')
 parser.add_argument("--nl", default='GELU', type=str, help='the nonlinearity throughout')
 parser.add_argument("--opt", default='SGD', type=str, help='the type of optimizer')
+parser.add_argument("--wd", default=0., type=float, help='the weight decay during model training')
 parser.add_argument('--mom', default=0.9, type=float, help='the momentum')
 parser.add_argument('--alpha', default=0.1, type=float, help='strength of l2sp')
 parser.add_argument('--beta', default=0.01, type=float, help='strength for l2-norm new head in transfer architecture')
@@ -104,6 +105,10 @@ def load_data():
         from data import load_indoor 
         train_set, test_set = load_indoor(paths['data_dir'])
         num_classes = 67
+    elif args.data == 'cifar10':
+        from data import cifar10
+        train_set, test_set = cifar10(paths['data_dir'])
+        num_classes = 10
     else:
         raise NotImplementedError(f"{args.data} is not available")
     return train_set, test_set, num_classes
@@ -117,7 +122,11 @@ print(f'{args.data} data loaded')
 
 # get model
 def load_model():
-    model_base = ResNet50Pretrained(num_classes).to(device)
+    model_base = ResNet50Pretrained(
+        num_classes,
+        small_conv1=args.data=='cifar10' # change 'conv1' layer for small dimensional data
+    ).to(device)
+
     model_base.load_state_dict(
         torch.load(
             os.path.join(paths["model_dir"], base_log_name if args.reg == "None" else log_name, f"model_e{args.eval_epoch}.pt"),
