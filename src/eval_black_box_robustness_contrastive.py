@@ -106,8 +106,15 @@ log_name, base_log_name = get_logging_name(args, args.model_type)
 # load data
 def load_data():
     if args.target_data == "cifar10":
-        from data import cifar10
-        train_set, test_set = cifar10(paths['data_dir'])
+        # for barlow and others, data are normalized, use normalize cifar10
+        if args.model_type == 'barlow' or args.model_type == 'transfer':
+            from data import cifar10
+            train_set, test_set = cifar10(paths['data_dir'])
+        elif args.model_type == 'simclr':
+            from data import cifar10_clean
+            train_set, test_set = cifar10_clean(paths["data_dir"])
+        else:
+            raise NotImplementedError(f"undefined model type for evaluation: {args.model_type}")
     else:
         raise NotImplementedError(f'{args.target_data} not available')
     return train_set, test_set
