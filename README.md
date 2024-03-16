@@ -15,6 +15,7 @@ source ./venv/bin/activate
 pip3 install numpy pandas scikit-learn matplotlib toml ffmpeg pytest
 
 # install pytorch that is compatible with local build (check out https://pytorch.org)
+# torchvision >= 0.17 (for imagenette api)
 pip3 install torch torchvision torchaudio
 pip3 install tensorboard
 ```

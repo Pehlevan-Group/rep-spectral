@@ -55,6 +55,8 @@ parser.add_argument('--reg-freq', default=1, type=int, help='the frequency of im
 parser.add_argument('--reg-freq-update', default=None, type=int, 
                     help='the frequency of imposing convolution singular value regularization per parameter update: None means reg every epoch only'
                     )
+parser.add_argument("--schedule", default=False, action='store_true', help='true to turn on cosine annealing lr scheduling')
+parser.add_argument("--tmax", default=200, type=int, help='the T-Max parameter in cosine annealing learning rate scheduling')
 
 # # iterative singular 
 parser.add_argument('--iterative', action='store_true', default=False, help='True to turn on iterative method')
@@ -140,6 +142,9 @@ opt_fc = getattr(optim, args.opt)(
     momentum=args.mom, 
     weight_decay=args.wd
 )
+if args.schedule:
+    scheduler_backbone = optim.lr_scheduler.CosineAnnealingLR(opt_backbone, T_max=args.tmax)
+    scheduler_fc = optim.lr_scheduler.CosineAnnealingWarmRestarts(opt_fc, T_max=args.tmax)
 
 # init model singular values if using power iteration
 if args.iterative:
@@ -262,6 +267,11 @@ def train():
 
         train_loss = total_train_loss / len(train_set)
         train_acc = total_train_acc / len(train_set)
+
+        # lr scheduling
+        if args.schedule:
+            scheduler_backbone.step()
+            scheduler_fc.step()
 
         # regularization after each epoch, if not updated on a per parameter update basis
         if (i > args.burnin) and (args.reg_freq_update is None) and (i % args.reg_freq == 0):
