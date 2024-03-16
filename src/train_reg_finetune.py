@@ -144,7 +144,7 @@ opt_fc = getattr(optim, args.opt)(
 )
 if args.schedule:
     scheduler_backbone = optim.lr_scheduler.CosineAnnealingLR(opt_backbone, T_max=args.tmax)
-    scheduler_fc = optim.lr_scheduler.CosineAnnealingWarmRestarts(opt_fc, T_max=args.tmax)
+    scheduler_fc = optim.lr_scheduler.CosineAnnealingLR(opt_fc, T_max=args.tmax)
 
 # init model singular values if using power iteration
 if args.iterative:
