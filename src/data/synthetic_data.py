@@ -194,3 +194,15 @@ class CustomDataset(Dataset):
 
     def __getitem__(self, idx) -> Tuple[torch.Tensor]:
         return self.x[idx], self.y[idx]
+
+class CustomScan(Dataset):
+    """wrap x to a torch dataset"""
+    def __init__(self, X: torch.Tensor):
+        super().__init__()
+        self.x = X 
+    
+    def __len__(self) -> int:
+        return len(self.x)
+    
+    def __getitem__(self, index) -> torch.Tensor:
+        return self.x[index]

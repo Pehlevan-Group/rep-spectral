@@ -68,7 +68,7 @@ def get_logging_name(args, mode: str) -> List[str]:
         )
 
     # ================ transfer learning =================
-    elif mode == 'transfer':
+    elif mode == "transfer":
         base_log_name = (
             f"{args.data}_m{args.model}_bs{args.batch_size}_lr{args.lr}_opt{args.opt}_wd{args.wd}"
             + f"_mom{args.mom}_nl{args.nl}_regNone_e{args.epochs}_seed{args.seed}"
