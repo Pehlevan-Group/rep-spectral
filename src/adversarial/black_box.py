@@ -211,8 +211,10 @@ class TangentAttack(Attacker):
                     )
                 else:  # * cifar10 and transfer learning tasks
                     random_noise = (
-                        torch.zeros_like(x_original).uniform_(
-                            self.perturb_vmin, self.perturb_vmax
+                        torch.zeros_like(x_original).normal_(
+                            # self.perturb_vmin, self.perturb_vmax
+                            0,
+                            self.perturb_vmax,
                         )
                         + x_original
                     )

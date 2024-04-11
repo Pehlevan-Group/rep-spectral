@@ -9,7 +9,7 @@ import torch.nn as nn
 
 # constants
 INIT_MEAN = 0
-INIT_STD = 1
+INIT_STD = 0.01  # * small initialization is more effective in brining what we are interested in
 
 
 # =========== utility layers
