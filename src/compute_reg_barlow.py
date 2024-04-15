@@ -62,7 +62,6 @@ parser.add_argument('--log-model', default=20, type=int, help='model logging fre
 # technical
 parser.add_argument('--tag', default='exp', type=str, help='the tag of batch of exp')
 parser.add_argument('--seed', default=401, type=int, help='the random init seed')
-args = parser.parse_args()
 
 # plotting the sample points
 parser.add_argument(
@@ -86,9 +85,9 @@ parser.add_argument(
     nargs="+",
     help="the target digits to generate plane from",
 )
-parser.add_argument("--vis-epochs", nargs='+', type=int, default=[200], help='the vis epochs')
+parser.add_argument("--vis-epochs", nargs='+', type=int, default=[1000], help='the vis epochs')
 
-
+args = parser.parse_args()
 torch.manual_seed(args.seed)
 
 # read paths
@@ -136,7 +135,7 @@ def load_sample_points():
 
     raw = torch.cartesian_prod(l, y)
     scan = (
-        origin + raw[:, [0]] * right_vec + raw[:, [1]] * up_vec
+        origin + raw[:, 0].reshape(-1, 1, 1, 1) * right_vec + raw[:, 1].reshape(-1, 1, 1, 1) * up_vec
     )  # orthogonal decomposition
 
     # save mid and endpoints
@@ -147,7 +146,7 @@ def load_sample_points():
 
     # add 3 sides
     t = torch.arange(args.sample_step,
-                     device=first_num_sample.device).reshape(-1, 1)
+                     device=first_num_sample.device).reshape(-1, 1, 1, 1)
     slice_12 = (
         second_num_sample - first_num_sample
     ) * t / args.sample_step + first_num_sample
