@@ -245,22 +245,6 @@ def main():
 
     # get model
     model = load_model()
-
-    # # initialize
-    # if args.reg == "None":
-    #     pbar = tqdm(range(0, args.epochs + 1, args.log_model))
-    # else:
-    #     # start training from burnin
-    #     pbar = tqdm(range(args.burnin, args.epochs + 1, args.log_model))
-
-    #     model.load_state_dict(
-    #         torch.load(
-    #             os.path.join(
-    #                 paths["model_dir"], base_log_name, f"model_e{args.burnin}.pt"
-    #             ),
-    #             map_location=device,
-    #         ),
-    #     )
     pbar = tqdm(args.vis_epochs)
 
     # training
@@ -268,7 +252,7 @@ def main():
         # load model parameters
         model.load_state_dict(
             torch.load(
-                os.path.join(paths["model_dir"], base_log_name, f"model_e{i}.pt"),
+                os.path.join(paths["model_dir"], log_name, f"model_e{i}.pt"),
                 map_location=device,
             ),
         )
