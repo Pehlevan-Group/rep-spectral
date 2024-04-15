@@ -264,7 +264,7 @@ def main():
         vol_elements, top_eigs = [], []
         for cur_scan in loader:
             cur_scan = cur_scan.to(device)
-            cur_vol, cur_eigs = determinant_and_eig_autograd(cur_scan, feature_map)
+            cur_eigs, cur_vol = determinant_and_eig_autograd(cur_scan, feature_map)
             vol_elements.append(cur_vol.detach().cpu())
             top_eigs.append(cur_eigs.detach().cpu())
 

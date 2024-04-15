@@ -58,6 +58,7 @@ def determinant_and_eig_autograd(
 ) -> Tuple[torch.Tensor]:
     """jointly get determinant and top eigenvalue"""
     cur_metric = metric(x, feature_map)
-    top_eigs, _ = torch.linalg.eigvalsh(cur_metric).max(dim=-1)
-    log_det = torch.log(torch.linalg.eigvalsh(cur_metric)).sum(dim=-1) / 2
+    eigvals = torch.linalg.eigvalsh(cur_metric)
+    top_eigs, _ = eigvals.max(dim=-1)
+    log_det = torch.log(eigvals).sum(dim=-1) / 2
     return top_eigs, log_det
