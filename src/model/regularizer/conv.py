@@ -22,7 +22,7 @@ def spectral_ub_regularizer_conv(model: nn.Module) -> torch.Tensor:
     reg_term = top_eig_ub_regularizer_conv(model)
 
     # last linear head
-    W = model.linear.weight
+    W = model.fc.weight
     eig = torch.linalg.eigvalsh(W.T @ W).max()
     reg_term += eig
     return reg_term
