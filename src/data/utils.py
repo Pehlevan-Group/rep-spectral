@@ -50,7 +50,7 @@ def random_samples_by_targets(
     for cur_target in targets:
         target = None
         while cur_target != target:
-            random_index = torch.randint(total_num_samples, (1,))
+            random_index = torch.randint(total_num_samples, (1,)).item()
             data, target = dataset[random_index]
         samples.append(data)
     return samples

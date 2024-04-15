@@ -144,6 +144,7 @@ parser.add_argument(
     nargs="+",
     help="the target digits to generate plane from",
 )
+parser.add_argument("--vis-epochs", nargs='+', type=int, default=[200], help='the vis epochs')
 
 args = parser.parse_args()
 
@@ -163,24 +164,6 @@ log_name, base_log_name = get_logging_name(args, "linear_large")
 if args.reg == "None":
     log_name = base_log_name
 result_path = os.path.join(paths["result_dir"], log_name)
-
-
-# # load data
-def load_data():
-    if args.data == "mnist":
-        from data import mnist
-
-        train_set, test_set = mnist(paths["data_dir"], flatten=True)
-    elif args.data == "fashion_mnist":
-        from data import fashion_mnist
-
-        train_set, test_set = fashion_mnist(paths["data_dir"], flatten=True)
-    else:
-        raise NotImplementedError(f"{args.data} not available")
-    return train_set, test_set
-
-
-# train_set, test_set = load_data()
 
 
 # load sample data
@@ -212,8 +195,8 @@ def load_sample_points():
         1 / 2 / 3 ** (1 / 2)
     )
 
-    l = torch.linspace(args.lower, args.upper, steps=args.sample_step).to(device)
-    y = torch.linspace(args.lower, args.upper, steps=args.sample_step).to(device)
+    l = torch.linspace(args.lower, args.upper, steps=args.sample_step)
+    y = torch.linspace(args.lower, args.upper, steps=args.sample_step)
 
     raw = torch.cartesian_prod(l, y)
     scan = (
@@ -263,21 +246,22 @@ def main():
     # get model
     model = load_model()
 
-    # initialize
-    if args.reg == "None":
-        pbar = tqdm(range(args.epochs + 1, args.log_model))
-    else:
-        # start training from burnin
-        pbar = tqdm(range(args.burnin, args.epochs + 1, args.log_model))
+    # # initialize
+    # if args.reg == "None":
+    #     pbar = tqdm(range(0, args.epochs + 1, args.log_model))
+    # else:
+    #     # start training from burnin
+    #     pbar = tqdm(range(args.burnin, args.epochs + 1, args.log_model))
 
-        model.load_state_dict(
-            torch.load(
-                os.path.join(
-                    paths["model_dir"], base_log_name, f"model_e{args.burnin}.pt"
-                ),
-                map_location=device,
-            ),
-        )
+    #     model.load_state_dict(
+    #         torch.load(
+    #             os.path.join(
+    #                 paths["model_dir"], base_log_name, f"model_e{args.burnin}.pt"
+    #             ),
+    #             map_location=device,
+    #         ),
+    #     )
+    pbar = tqdm(args.vis_epochs)
 
     # training
     for i in pbar:
