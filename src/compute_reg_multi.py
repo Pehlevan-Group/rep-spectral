@@ -14,9 +14,8 @@ from torch.utils.data import DataLoader
 
 # load file
 from data import CustomScan, random_samples_by_targets
-from utils import determinant_and_eig_autograd
 from model import SLP
-from utils import load_config, get_logging_name
+from utils import load_config, get_logging_name, determinant_and_eig_autograd
 
 # arguments
 parser = argparse.ArgumentParser()
