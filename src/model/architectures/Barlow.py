@@ -29,12 +29,11 @@ class BarlowTwins(nn.Module):
         """
         super().__init__()
         self.backbone = backbone
-        self.feature_map = backbone.feature_map
         self.batch_size = bs
         self.lambd = lambd
 
         # projector
-        sizes = [backbone.linear.in_features] + list(projector)
+        sizes = [backbone.fc.in_features] + list(projector)
         layers = []
         for i in range(len(sizes) - 2):
             layers.append(nn.Linear(sizes[i], sizes[i + 1], bias=False))
@@ -45,6 +44,9 @@ class BarlowTwins(nn.Module):
 
         # normalization layer for the representations z1 and z2
         self.bn = nn.BatchNorm1d(sizes[-1], affine=False)
+
+    def feature_map(self, x: torch.Tensor):
+        return self.backbone.feature_map(x)
 
     def forward(self, y1, y2) -> torch.Tensor:
         z1 = self.projector(self.feature_map(y1))
