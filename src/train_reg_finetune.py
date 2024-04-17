@@ -110,6 +110,11 @@ def load_data():
         train_set, test_set = cifar10(paths['data_dir'])
         num_classes = 10
         h = w = 32
+    elif args.data == 'cifar10_resized':
+        from data import cifar10_resized
+        train_set, test_set = cifar10_resized(paths['data_dir'])
+        num_classes = 10
+        h = w = 224
     else:
         raise NotImplementedError(f"{args.data} is not available")
     return train_set, test_set, num_classes, (h, w)
@@ -131,7 +136,7 @@ model = ResNet50Pretrained(
 # backbone parameters
 opt_backbone = getattr(optim, args.opt)(
     model.model.parameters(), 
-    lr=args.lr / 10,  # * much smaller learning rate for the pretraiend layers
+    lr=args.lr / 5,  # ! much smaller learning rate for the pretraiend layers
     weight_decay=args.wd, 
     momentum=args.mom
 )
