@@ -109,6 +109,10 @@ def load_data():
         from data import cifar10
         train_set, test_set = cifar10(paths['data_dir'])
         num_classes = 10
+    elif args.data == 'cifar10_resized':
+        from data import cifar10_resized
+        train_set, test_set = cifar10_resized(paths['data_dir'])
+        num_classes = 10
     else:
         raise NotImplementedError(f"{args.data} is not available")
     return train_set, test_set, num_classes
