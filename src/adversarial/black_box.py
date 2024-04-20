@@ -218,7 +218,7 @@ class TangentAttack(Attacker):
                         )
                         + x_original
                     )
-                    random_noise = random_noise.clamp(min=-3, max=3)
+                    random_noise = random_noise.clamp(min=self.vmin, max=self.vmax)
 
                 random_noise_pred = self.get_decision(random_noise)
                 failure_count += 1
