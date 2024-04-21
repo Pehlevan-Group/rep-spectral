@@ -158,8 +158,8 @@ loss_fn = nn.CrossEntropyLoss()
 if "None" in args.reg:
     pbar = tqdm(range(args.epochs + 1))
 else:
-    # start training from burnin
-    pbar = tqdm(range(args.burnin, args.epochs + 1))
+    # start training from burnin (empty pass for learning rates scheduling)
+    pbar = tqdm(range(args.epochs + 1))
 
     # load model
     try:
@@ -242,6 +242,12 @@ def train():
 
     # training
     for i in pbar:
+        # update scheduling rate
+        if "None" not in args.reg and i < args.burnin and args.schedule:
+            scheduler_backbone.step()
+            scheduler_fc.step()
+            continue
+        
         model.train()
         total_train_loss, total_train_acc = 0, 0
         for param_update_count, (X_train, y_train) in enumerate(train_loader):
