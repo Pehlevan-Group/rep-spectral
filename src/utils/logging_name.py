@@ -90,7 +90,7 @@ def get_logging_name(args, mode: str) -> List[str]:
 
         base_log_name = (
             f"{args.data}_m{args.model}_bs{args.batch_size}_lr{args.lr}_opt{args.opt}"
-            + f"_mom{args.mom}_regNone_e{args.epochs}_seed{args.seed}"
+            + f"_mom{args.mom}_reg['None']_e{args.epochs}_seed{args.seed}"
         )
         log_name = (
             f"{args.data}_m{args.model}_bs{args.batch_size}_lr{args.lr}_opt{args.opt}"

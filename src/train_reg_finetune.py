@@ -84,8 +84,9 @@ if args.reg_freq_update is not None:
 
 # set up summary writer
 log_name, base_log_name = get_logging_name(args, 'finetune')
-if args.reg == "None": log_name = base_log_name
-model_path = os.makedirs(os.path.join(paths['model_dir'], log_name), exist_ok=True)
+if "None" in args.reg: log_name = base_log_name
+model_path = os.path.join(paths['model_dir'], log_name)
+os.makedirs(model_path, exist_ok=True)
 writer = SummaryWriter(os.path.join(paths['result_dir'], log_name))
 
 # load data
@@ -151,6 +152,27 @@ if args.schedule:
     scheduler_backbone = optim.lr_scheduler.CosineAnnealingLR(opt_backbone, T_max=args.tmax)
     scheduler_fc = optim.lr_scheduler.CosineAnnealingLR(opt_fc, T_max=args.tmax)
 
+loss_fn = nn.CrossEntropyLoss()
+
+# initialize
+if "None" in args.reg:
+    pbar = tqdm(range(args.epochs + 1))
+else:
+    # start training from burnin
+    pbar = tqdm(range(args.burnin, args.epochs + 1))
+
+    # load model
+    try:
+        model.load_state_dict(
+            torch.load(os.path.join(paths['model_dir'], base_log_name, f'model_e{args.burnin}.pt'),
+                        map_location=device),
+        )
+    except:
+        warnings.warn(f"Not finding base model {base_log_name}, retraining ...")
+        # relapse back to full training
+        pbar = tqdm(range(args.epochs + 1))
+
+
 # init model singular values if using power iteration
 if args.iterative:
     if 'spectral' in args.reg or 'eig-ub' in args.reg:
@@ -161,7 +183,7 @@ if args.iterative:
             max_layer = 4
         
         # set up initial guess dump path
-        dump_path = os.path.join(paths["model_dir"], f"resnet50pt_{h}_{w}_right_v_init")
+        dump_path = os.path.join(model_path, f"resnet50pt_{h}_{w}_right_v_init")
         os.makedirs(dump_path, exist_ok=True)
         v_init = init_model_right_singular_conv(
             model, tol=args.eps, h=h, w=w, max_layer=max_layer, 
@@ -217,25 +239,6 @@ def update_conv(model: ResNet50Pretrained):
 # ================= main driver training functions =================
 def train():
     """train a model with/without regularization"""
-    loss_fn = nn.CrossEntropyLoss()
-
-    # initialize
-    if "None" in args.reg:
-        pbar = tqdm(range(args.epochs + 1))
-    else:
-        # start training from burnin
-        pbar = tqdm(range(args.burnin, args.epochs + 1))
-
-        # load model
-        try:
-            model.load_state_dict(
-                torch.load(os.path.join(paths['model_dir'], base_log_name, f'model_e{args.burnin}.pt'),
-                           map_location=device),
-            )
-        except:
-            warnings.warn('Not finding base model, retraining ...')
-            # relapse back to full training
-            pbar = tqdm(range(args.epochs + 1))
 
     # training
     for i in pbar:
