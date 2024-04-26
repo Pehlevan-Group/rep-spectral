@@ -133,7 +133,7 @@ def load_model():
 
     model_base.load_state_dict(
         torch.load(
-            os.path.join(paths["model_dir"], base_log_name if args.reg == "None" else log_name, f"model_e{args.eval_epoch}.pt"),
+            os.path.join(paths["model_dir"], base_log_name if "None" in args.reg else log_name, f"model_e{args.eval_epoch}.pt"),
             map_location=device
         )
     )
@@ -206,7 +206,7 @@ def record(dists: List[float]):
     """dump computed distance to files"""
     series = pd.Series(dists)
     series.to_csv(
-        os.path.join(paths['result_dir'],  base_log_name if args.reg == "None" else log_name, 
+        os.path.join(paths['result_dir'],  base_log_name if "None" in args.reg else log_name, 
         f'black_box_l2_e{args.eval_epoch}_{args.attacker}_tar{args.target}_T{args.T}_tol{args.tol}.csv')
     )
 
