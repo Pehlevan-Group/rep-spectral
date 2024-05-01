@@ -76,14 +76,16 @@ def cifar10(data_path):
             transforms.RandomCrop(32, padding=4),
             transforms.RandomHorizontalFlip(),
             transforms.ToTensor(),
-            transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
+            transforms.Normalize((0.4914, 0.4822, 0.4465),
+                                 (0.2023, 0.1994, 0.2010)),
         ]
     )
 
     transform_test = transforms.Compose(
         [
             transforms.ToTensor(),
-            transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
+            transforms.Normalize((0.4914, 0.4822, 0.4465),
+                                 (0.2023, 0.1994, 0.2010)),
         ]
     )
 
@@ -105,7 +107,8 @@ def cifar10_resized(data_path):
             transforms.RandomResizedCrop((224, 224)),
             transforms.RandomHorizontalFlip(),
             transforms.ToTensor(),
-            transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
+            transforms.Normalize((0.4914, 0.4822, 0.4465),
+                                 (0.2023, 0.1994, 0.2010)),
         ]
     )
 
@@ -113,7 +116,8 @@ def cifar10_resized(data_path):
         [
             transforms.Resize((224, 224)),
             transforms.ToTensor(),
-            transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
+            transforms.Normalize((0.4914, 0.4822, 0.4465),
+                                 (0.2023, 0.1994, 0.2010)),
         ]
     )
 
@@ -188,14 +192,16 @@ def cifar100(data_path):
             transforms.RandomCrop(32, padding=4),
             transforms.RandomHorizontalFlip(),
             transforms.ToTensor(),
-            transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
+            transforms.Normalize((0.4914, 0.4822, 0.4465),
+                                 (0.2023, 0.1994, 0.2010)),
         ]
     )
 
     transform_test = transforms.Compose(
         [
             transforms.ToTensor(),
-            transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
+            transforms.Normalize((0.4914, 0.4822, 0.4465),
+                                 (0.2023, 0.1994, 0.2010)),
         ]
     )
 
@@ -239,3 +245,24 @@ def imagenette(data_path):
     )
 
     return trainset, testset
+
+# ================= ImageNet ==================
+def imagenet1k(data_path):
+    """load imagenet1k"""
+    normalization = transforms.Normalize(
+        mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]
+    )
+    transform_train = transforms.Compose([
+        transforms.RandomResizedCrop((224, 224)),
+        transforms.RandomHorizontalFlip(),
+        transforms.ColorJitter(0.3, 0.3, 0.3),
+        transforms.ToTensor(),
+        normalization
+    ])
+    transform_val = transforms.Compose([transforms.Resize((224, 224), largest=True),
+                                       transforms.ToTensor(),
+                                       normalization])
+
+    trainset = torchvision.datasets.ImageNet(data_path, "train", transform=transform_train)
+    valset = torchvision.datasets.ImageNet(data_path, "val", transform=transform_val)
+    return trainset, valset
