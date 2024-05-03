@@ -42,8 +42,6 @@ parser.add_argument("--nl", default='ReLU', type=str, help='the nonlinearity thr
 parser.add_argument("--opt", default='SGD', type=str, help='the type of optimizer')
 parser.add_argument("--wd", default=1e-4, type=float, help='the weight decay overall')
 parser.add_argument('--mom', default=0.9, type=float, help='the momentum')
-parser.add_argument('--alpha', default=0.1, type=float, help='strength of l2sp')
-parser.add_argument('--beta', default=0.01, type=float, help='strength for l2-norm new head in transfer architecture')
 parser.add_argument('--lam', default=1e-4, type=float, help='the multiplier / strength of regularization')
 parser.add_argument("--max-layer", default=None, type=int, 
                     help='the number of layers to regularize in ResNet architecture; None to regularize all'
@@ -56,7 +54,6 @@ parser.add_argument('--reg-freq-update', default=None, type=int,
                     help='the frequency of imposing convolution singular value regularization per parameter update: None means reg every epoch only'
                     )
 parser.add_argument("--schedule", default=False, action='store_true', help='true to turn on cosine annealing lr scheduling')
-parser.add_argument("--tmax", default=200, type=int, help='the T-Max parameter in cosine annealing learning rate scheduling')
 
 # # iterative singular 
 parser.add_argument('--iterative', action='store_true', default=False, help='True to turn on iterative method')
@@ -175,8 +172,7 @@ def train(rank: int):
     
     # wrap to DDP
     ddp_model = DDP(model, device_ids=[device_id])
-    # linear_scaled_lr = 8.0 * args.lr * args.batch_size * num_tasks / 512.0
-    linear_scaled_lr = args.lr
+    linear_scaled_lr = 8.0 * args.lr * args.batch_size * num_tasks / 512.0
 
     # get optimizer 
     opt = getattr(optim, args.opt)(
