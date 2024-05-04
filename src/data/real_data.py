@@ -9,6 +9,7 @@ collection of real dataset
 """
 
 # load packages
+import os
 import math
 import torch
 import torchvision

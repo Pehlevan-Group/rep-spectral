@@ -61,8 +61,8 @@ parser.add_argument('--eps', default=1e-4, type=float, help='the tolerance for s
 parser.add_argument('--max-update', default=1, type=int, help='the maximum update iteration during training')
 
 # logging
-parser.add_argument('--log-epoch', default=20, type=int, help='logging frequency')
-parser.add_argument('--log-model', default=20, type=int, help='model logging frequency')
+parser.add_argument('--log-epoch', default=60, type=int, help='logging frequency')
+parser.add_argument('--log-model', default=10, type=int, help='model logging frequency')
 
 # technical
 parser.add_argument('--tag', default='exp', type=str, help='the tag of batch of exp')
@@ -145,14 +145,14 @@ def train(rank: int):
 
     # batch to dataloader
     train_sampler = RASampler(train_set, num_tasks, rank, len(train_set), args.batch_size, repetitions=3, len_factor=2.0, shuffle=True, drop_last=False)
-    train_loader = DataLoader(train_set, batch_size=args.batch_size, sampler=train_sampler)
+    train_loader = DataLoader(train_set, batch_size=args.batch_size, sampler=train_sampler, num_workers=10)
     test_sampler = RASampler(test_set, num_tasks, rank, len(test_set), args.batch_size, repetitions=1, len_factor=1.0, shuffle=False, drop_last=False)
-    test_loader = DataLoader(test_set, batch_size=args.batch_size, sampler=test_sampler)
+    test_loader = DataLoader(test_set, batch_size=args.batch_size, sampler=test_sampler, num_workers=10)
     if rank == 0: print(f'{args.data} data loaded')
 
     # get model
     nl = getattr(nn, args.nl)()
-    model = ResNet50(num_classes=num_classes, nl=nl).to(device_id)
+    model = ResNet50(num_classes=num_classes, nl=nl, small_input=False).to(device_id)
 
     # initialize
     if "None" in args.reg:
@@ -171,7 +171,7 @@ def train(rank: int):
             pbar = tqdm(range(args.epochs + 1))
     
     # wrap to DDP
-    ddp_model = DDP(model, device_ids=[device_id])
+    ddp_model = DDP(model, device_ids=[device_id], output_device=device_id)
     linear_scaled_lr = 8.0 * args.lr * args.batch_size * num_tasks / 512.0
 
     # get optimizer 
@@ -297,7 +297,6 @@ def train(rank: int):
 
 
 def main():
-    # initialize group of communications
     dist.init_process_group("nccl") # for FASRC
     rank = dist.get_rank()
     if rank == 0: print(f"DDP initialized, using {torch.cuda.device_count()} ranks")
