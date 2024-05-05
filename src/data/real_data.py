@@ -254,12 +254,23 @@ def imagenet1k(data_path):
     normalization = transforms.Normalize(
         mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]
     )
+    jittering = torch.utils.ColorJitter(brightness=0.4, contrast=0.4, saturation=0.4)
+    lighting = torch.utils.Lighting(
+        alphastd=0.1,
+        eigval=[0.2175, 0.0188, 0.0045],
+        eigvec=[
+            [-0.5675, 0.7192, 0.4009],
+            [-0.5808, -0.0045, -0.8140],
+            [-0.5836, -0.6948, 0.4203],
+        ],
+    )
     transform_train = transforms.Compose(
         [
             transforms.RandomResizedCrop((224, 224)),
             transforms.RandomHorizontalFlip(),
-            transforms.ColorJitter(0.3, 0.3, 0.3),
             transforms.ToTensor(),
+            jittering,
+            lighting,
             normalization,
         ]
     )
@@ -292,8 +303,19 @@ class RASampler(torch.utils.data.Sampler):
     # TODO: document clearly
     """
 
-    def __init__(self,dataset,num_replicas, rank, dataset_len, batch_size, repetitions=1, len_factor=1.0, shuffle=False, drop_last=False):
-        self.dataset=dataset
+    def __init__(
+        self,
+        dataset,
+        num_replicas,
+        rank,
+        dataset_len,
+        batch_size,
+        repetitions=1,
+        len_factor=1.0,
+        shuffle=False,
+        drop_last=False,
+    ):
+        self.dataset = dataset
         self.dataset_len = dataset_len
         self.batch_size = batch_size
         self.repetitions = repetitions
@@ -304,10 +326,11 @@ class RASampler(torch.utils.data.Sampler):
         self.num_replicas = num_replicas
         self.rank = rank
         self.epoch = 0
-        self.num_samples = int(math.ceil(len(self.dataset) * self.repetitions * 1.0 / self.num_replicas))
+        self.num_samples = int(
+            math.ceil(len(self.dataset) * self.repetitions * 1.0 / self.num_replicas)
+        )
         self.total_size = self.num_samples * self.num_replicas
-        
-        
+
     def shuffler(self):
         if self.shuffle:
             new_perm = lambda: iter(torch.randperm(self.dataset_len))
@@ -326,18 +349,17 @@ class RASampler(torch.utils.data.Sampler):
     def __iter__(self):
         shuffle = iter(self.shuffler())
         seen = 0
-        indices=[]
+        indices = []
         for _ in range(self.len_images):
             index = next(shuffle)
             indices.append(index)
-        indices += indices[:(self.total_size - len(indices))]
+        indices += indices[: (self.total_size - len(indices))]
         assert len(indices) == self.total_size
         # subsample
-        indices = indices[self.rank:self.total_size:self.num_replicas]
+        indices = indices[self.rank : self.total_size : self.num_replicas]
         assert len(indices) == self.num_samples
 
         return iter(indices)
-
 
     def __len__(self):
         return self.num_samples

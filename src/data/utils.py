@@ -54,3 +54,26 @@ def random_samples_by_targets(
             data, target = dataset[random_index]
         samples.append(data)
     return samples
+
+
+def rand_bbox(size: torch.Size, lam: torch.Tensor) -> Tuple[int]:
+    """
+    get a random bounding box regions
+    modified from https://github.com/clovaai/CutMix-PyTorch
+    """
+    W = size[2]
+    H = size[3]
+    cut_rat = torch.sqrt(1.0 - lam)
+    cut_w = int((W * cut_rat).item())
+    cut_h = int((H * cut_rat).item())
+
+    # uniform
+    cx = torch.randint(0, W, (1,)).item()
+    cy = torch.randint(0, H, (1,)).item()
+
+    bbx1 = torch.clip(cx - cut_w // 2, 0, W)
+    bby1 = torch.clip(cy - cut_h // 2, 0, H)
+    bbx2 = torch.clip(cx + cut_w // 2, 0, W)
+    bby2 = torch.clip(cy + cut_h // 2, 0, H)
+
+    return bbx1, bby1, bbx2, bby2

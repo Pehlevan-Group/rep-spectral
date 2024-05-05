@@ -25,7 +25,7 @@ from model import (
     init_model_right_singular_conv
 )
 from utils import load_config, get_logging_name
-from data import RASampler
+from data import RASampler, rand_bbox
 
 # arguments
 parser = argparse.ArgumentParser()
@@ -54,6 +54,9 @@ parser.add_argument('--reg-freq-update', default=None, type=int,
                     help='the frequency of imposing convolution singular value regularization per parameter update: None means reg every epoch only'
                     )
 parser.add_argument("--schedule", default=False, action='store_true', help='true to turn on cosine annealing lr scheduling')
+parser.add_argument("--cutmix", default=False, action='store_true', help='True to turn on cutmix data aug')
+parser.add_argument('--cutmix-prob', default=1., type=float, help='the probability of each batch selected to be cutmixed')
+
 
 # # iterative singular 
 parser.add_argument('--iterative', action='store_true', default=False, help='True to turn on iterative method')
@@ -145,9 +148,9 @@ def train(rank: int):
 
     # batch to dataloader
     train_sampler = RASampler(train_set, num_tasks, rank, len(train_set), args.batch_size, repetitions=3, len_factor=2.0, shuffle=True, drop_last=False)
-    train_loader = DataLoader(train_set, batch_size=args.batch_size, sampler=train_sampler, num_workers=10)
+    train_loader = DataLoader(train_set, batch_size=args.batch_size, sampler=train_sampler, num_workers=10, pin_memory=True)
     test_sampler = RASampler(test_set, num_tasks, rank, len(test_set), args.batch_size, repetitions=1, len_factor=1.0, shuffle=False, drop_last=False)
-    test_loader = DataLoader(test_set, batch_size=args.batch_size // 4, sampler=test_sampler, num_workers=10) # ! smaller test size
+    test_loader = DataLoader(test_set, batch_size=args.batch_size // 4, sampler=test_sampler, num_workers=10, pin_memory=True) # ! smaller test size
     if rank == 0: print(f'{args.data} data loaded')
 
     # get model
@@ -184,7 +187,9 @@ def train(rank: int):
 
     # linear scheduling
     if args.schedule:
-        scheduler = optim.lr_scheduler.StepLR(opt, step_size=30)
+        step_size = 30
+        if args.epochs == 300: step_size = 75
+        scheduler = optim.lr_scheduler.StepLR(opt, step_size=step_size)
 
     loss_fn = nn.CrossEntropyLoss()
 
@@ -225,8 +230,24 @@ def train(rank: int):
         for param_update_count, (X_train, y_train) in enumerate(train_loader):
             X_train, y_train = X_train.cuda(device_id, non_blocking=True), y_train.cuda(device_id, non_blocking=True)
             opt.zero_grad()
-            y_pred_logits = ddp_model(X_train)
-            train_loss = loss_fn(y_pred_logits, y_train)
+
+            # cutmix data augmentation: from https://github.com/clovaai/CutMix-PyTorch
+            r = torch.rand(1)
+            if args.cutmix and r < args.cutmix_prob:
+                lam = torch.rand(1) # uniform [0, 1)
+                rand_index = torch.randperm(X_train.size()[0]).cuda()
+                y_train_a = y_train
+                y_train_b = y_train[rand_index]
+                bbx1, bby1, bbx2, bby2 = rand_bbox(X_train.size(), lam)
+                X_train[:, :, bbx1:bbx2, bby1:bby2] = X_train[rand_index, :, bbx1:bbx2, bby1:bby2]
+                # adjust lambda to exactly match pixel ratio
+                lam = 1 - ((bbx2 - bbx1) * (bby2 - bby1) (X_train.size()[-1] * X_train.size()[-2]))
+                # compute output
+                output = ddp_model(X_train)
+                train_loss = loss_fn(output, y_train_a) * lam + loss_fn(output, y_train_b) * (1. - lam)
+            else: 
+                y_pred_logits = ddp_model(X_train)
+                train_loss = loss_fn(y_pred_logits, y_train)
 
             # add hard stop if nan
             if torch.isnan(train_loss): raise ValueError("loss is nan")
