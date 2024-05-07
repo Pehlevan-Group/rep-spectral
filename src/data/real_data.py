@@ -254,8 +254,8 @@ def imagenet1k(data_path):
     normalization = transforms.Normalize(
         mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]
     )
-    jittering = torch.utils.ColorJitter(brightness=0.4, contrast=0.4, saturation=0.4)
-    lighting = torch.utils.Lighting(
+    jittering = transforms.ColorJitter(brightness=0.4, contrast=0.4, saturation=0.4)
+    lighting = Lighting(
         alphastd=0.1,
         eigval=[0.2175, 0.0188, 0.0045],
         eigvec=[
@@ -292,7 +292,25 @@ def imagenet1k(data_path):
     valset = torchvision.datasets.ImageNet(data_path, "val", transform=transform_val)
     return trainset, valset
 
+class Lighting:
+    """Lighting noise(AlexNet - style PCA - based noise)"""
 
+    def __init__(self, alphastd, eigval, eigvec):
+        self.alphastd = alphastd
+        self.eigval = torch.Tensor(eigval)
+        self.eigvec = torch.Tensor(eigvec)
+
+    def __call__(self, img):
+        if self.alphastd == 0:
+            return img
+
+        alpha = img.new().resize_(3).normal_(0, self.alphastd)
+        rgb = self.eigvec.type_as(img).clone() \
+            .mul(alpha.view(1, 3).expand(3, 3)) \
+            .mul(self.eigval.view(1, 3).expand(3, 3)) \
+            .sum(1).squeeze()
+
+        return img.add(rgb.view(3, 1, 1).expand_as(img))
 class RASampler(torch.utils.data.Sampler):
     """
     Batch Sampler with Repeated Augmentations (RA), adapted from FixRes

@@ -1,5 +1,6 @@
 # load packages
 from typing import Tuple, List
+import numpy as np
 import torch
 from torch.utils.data import Dataset
 
@@ -71,9 +72,9 @@ def rand_bbox(size: torch.Size, lam: torch.Tensor) -> Tuple[int]:
     cx = torch.randint(0, W, (1,)).item()
     cy = torch.randint(0, H, (1,)).item()
 
-    bbx1 = torch.clip(cx - cut_w // 2, 0, W)
-    bby1 = torch.clip(cy - cut_h // 2, 0, H)
-    bbx2 = torch.clip(cx + cut_w // 2, 0, W)
-    bby2 = torch.clip(cy + cut_h // 2, 0, H)
+    bbx1 = np.clip(cx - cut_w // 2, 0, W)
+    bby1 = np.clip(cy - cut_h // 2, 0, H)
+    bbx2 = np.clip(cx + cut_w // 2, 0, W)
+    bby2 = np.clip(cy + cut_h // 2, 0, H)
 
     return bbx1, bby1, bbx2, bby2

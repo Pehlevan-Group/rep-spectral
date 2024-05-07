@@ -34,6 +34,7 @@ parser.add_argument("--data", default='imagenet1k', type=str, help='data to perf
 
 # model
 parser.add_argument('--model', default='50', type=str, help="resnet model number", choices=["18", "34", "50", "101", "152"])
+parser.add_argument("--checkpoint", default=0, type=int, help='use this argument to continue training at checkpoint epoch')
 
 # training
 parser.add_argument('--batch-size', default=64, type=int, help='the batchsize for training at each GPU')
@@ -147,10 +148,15 @@ def train(rank: int):
     train_set, test_set, num_classes, (h, w) = load_data()
 
     # batch to dataloader
-    train_sampler = RASampler(train_set, num_tasks, rank, len(train_set), args.batch_size, repetitions=3, len_factor=2.0, shuffle=True, drop_last=False)
+    if args.cutmix:
+        train_sampler = RASampler(train_set, num_tasks, rank, len(train_set), args.batch_size, repetitions=1, len_factor=1.0, shuffle=True, drop_last=False)
+        test_sampler = RASampler(test_set, num_tasks, rank, len(test_set), args.batch_size, repetitions=1, len_factor=1.0, shuffle=False, drop_last=False)
+    # no data training repeating if no cutmix 
+    else:
+        train_sampler = RASampler(train_set, num_tasks, rank, len(train_set), args.batch_size, repetitions=3, len_factor=2.0, shuffle=True, drop_last=False)
+        test_sampler = RASampler(test_set, num_tasks, rank, len(test_set), args.batch_size, repetitions=1, len_factor=1.0, shuffle=False, drop_last=False)
     train_loader = DataLoader(train_set, batch_size=args.batch_size, sampler=train_sampler, num_workers=10, pin_memory=True)
-    test_sampler = RASampler(test_set, num_tasks, rank, len(test_set), args.batch_size, repetitions=1, len_factor=1.0, shuffle=False, drop_last=False)
-    test_loader = DataLoader(test_set, batch_size=args.batch_size // 4, sampler=test_sampler, num_workers=10, pin_memory=True) # ! smaller test size
+    test_loader = DataLoader(test_set, batch_size=args.batch_size // 4, sampler=test_sampler, num_workers=10, pin_memory=True)
     if rank == 0: print(f'{args.data} data loaded')
 
     # get model
@@ -159,7 +165,21 @@ def train(rank: int):
 
     # initialize
     if "None" in args.reg:
-        pbar = tqdm(range(args.epochs + 1))
+        if args.checkpoint == 0:
+            pbar = tqdm(range(args.epochs + 1))
+        
+        # due to cluster policy, we may not run indefinitely, start running from terminated epochs
+        else:
+            pbar = tqdm(range(args.checkpoint, args.epochs + 1))
+
+        # load model
+        try:
+            print(os.path.join(paths['model_dir'], base_log_name, f'model_e{args.checkpoint}.pt'))
+            model.load_state_dict(torch.load(os.path.join(paths['model_dir'], base_log_name, f'model_e{args.checkpoint}.pt'), map_location=f"cuda:{device_id}"))
+        except:
+            warnings.warn(f"Not finding checkpoint epoch {args.checkpoint}, retraining ...")
+            # relapse back to full training
+            pbar = tqdm(range(args.epochs + 1))
 
     # load from checkpoints
     else:
@@ -167,7 +187,7 @@ def train(rank: int):
 
         # load model
         try:
-            model.load_state_dict(torch.load(os.path.join(paths['model_dir'], base_log_name, f'model_e{args.burnin}.pt'), map_location=device_id))
+            model.load_state_dict(torch.load(os.path.join(paths['model_dir'], base_log_name, f'model_e{args.burnin}.pt'), map_location=f"cuda:{device_id}"))
         except:
             warnings.warn(f"Not finding base model {base_log_name}, retraining ...")
             # relapse back to full training
@@ -176,6 +196,8 @@ def train(rank: int):
     # wrap to DDP
     ddp_model = DDP(model, device_ids=[device_id], output_device=device_id)
     linear_scaled_lr = 8.0 * args.lr * args.batch_size * num_tasks / 512.0
+    if args.epochs == 300:
+        linear_scaled_lr = args.lr 
 
     # get optimizer 
     opt = getattr(optim, args.opt)(
@@ -235,16 +257,16 @@ def train(rank: int):
             r = torch.rand(1)
             if args.cutmix and r < args.cutmix_prob:
                 lam = torch.rand(1) # uniform [0, 1)
-                rand_index = torch.randperm(X_train.size()[0]).cuda()
+                rand_index = torch.randperm(X_train.size()[0]).cuda(device_id)
                 y_train_a = y_train
                 y_train_b = y_train[rand_index]
                 bbx1, bby1, bbx2, bby2 = rand_bbox(X_train.size(), lam)
                 X_train[:, :, bbx1:bbx2, bby1:bby2] = X_train[rand_index, :, bbx1:bbx2, bby1:bby2]
                 # adjust lambda to exactly match pixel ratio
-                lam = 1 - ((bbx2 - bbx1) * (bby2 - bby1) (X_train.size()[-1] * X_train.size()[-2]))
+                lam = 1 - ((bbx2 - bbx1) * (bby2 - bby1) / (X_train.size()[-1] * X_train.size()[-2]))
                 # compute output
-                output = ddp_model(X_train)
-                train_loss = loss_fn(output, y_train_a) * lam + loss_fn(output, y_train_b) * (1. - lam)
+                y_pred_logits = ddp_model(X_train)
+                train_loss = loss_fn(y_pred_logits, y_train_a) * lam + loss_fn(y_pred_logits, y_train_b) * (1. - lam)
             else: 
                 y_pred_logits = ddp_model(X_train)
                 train_loss = loss_fn(y_pred_logits, y_train)
@@ -269,7 +291,7 @@ def train(rank: int):
                 # synchronize parameters (blocking)
                 for param in ddp_model.parameters(): dist.broadcast(param.data, src=0)
             
-            if param_update_count >= 5005 * 512 / (args.batch_size * num_tasks):
+            if not args.cutmix and param_update_count >= 5005 * 512 / (args.batch_size * num_tasks):
                 break
 
         # reduce statistics in each rank 
