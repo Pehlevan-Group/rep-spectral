@@ -156,7 +156,7 @@ def train(rank: int):
         train_sampler = RASampler(train_set, num_tasks, rank, len(train_set), args.batch_size, repetitions=3, len_factor=2.0, shuffle=True, drop_last=False)
         test_sampler = RASampler(test_set, num_tasks, rank, len(test_set), args.batch_size, repetitions=1, len_factor=1.0, shuffle=False, drop_last=False)
     train_loader = DataLoader(train_set, batch_size=args.batch_size, sampler=train_sampler, num_workers=10, pin_memory=True)
-    test_loader = DataLoader(test_set, batch_size=args.batch_size // 4, sampler=test_sampler, num_workers=10, pin_memory=True)
+    test_loader = DataLoader(test_set, batch_size=args.batch_size, sampler=test_sampler, num_workers=10, pin_memory=True)
     if rank == 0: print(f'{args.data} data loaded')
 
     # get model

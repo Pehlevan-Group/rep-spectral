@@ -297,8 +297,13 @@ class ResNet(nn.Module):
 
         return x
 
-    def forward(self, x: Tensor) -> Tensor:
-        return self._forward_impl(x)
+    def forward(self, x: Tensor, return_features=False) -> Tensor:
+        features = self.feature_map(x)
+        out = self.fc(features)
+        if return_features:
+            return features, out
+        else:
+            return out
 
     # ------- for regularization ---------
     def _chain_generators(self, *generators):
