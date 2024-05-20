@@ -158,6 +158,7 @@ class ResNet(nn.Module):
         width_per_group: int = 64,
         replace_stride_with_dilation: Optional[List[bool]] = None,
         norm_layer: Optional[Callable[..., nn.Module]] = None,
+        small_input=True,
     ) -> None:
         super().__init__()
         if norm_layer is None:
@@ -166,6 +167,7 @@ class ResNet(nn.Module):
 
         self.inplanes = 64
         self.dilation = 1
+        self.small_input = small_input # small for (32 * 32), otherwise for (224 * 224)
         if replace_stride_with_dilation is None:
             # each element in the tuple indicates if we should replace
             # the 2x2 stride with a dilated convolution instead
@@ -177,15 +179,19 @@ class ResNet(nn.Module):
             )
         self.groups = groups
         self.base_width = width_per_group
-        self.conv1 = Conv2dWrap(
-            # nn.Conv2d(3, self.inplanes, kernel_size=7, stride=2, padding=3, bias=False) # for 224 * 224 inputs
-            nn.Conv2d(
-                3, self.inplanes, kernel_size=3, padding=1, bias=False
-            )  # for 32 * 32 inputs
-        )
+        if self.small_input:
+            self.conv1 = Conv2dWrap(
+                nn.Conv2d(
+                    3, self.inplanes, kernel_size=3, padding=1, bias=False
+                )  # for 32 * 32 inputs
+            )
+        else:
+            self.conv1 = Conv2dWrap(
+                nn.Conv2d(3, self.inplanes, kernel_size=7, stride=2, padding=3, bias=False) # for 224 * 224 inputs
+            )
         self.bn1 = norm_layer(self.inplanes)
         self.relu = nn.ReLU(inplace=True)
-        # self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
+        self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
         self.layer1 = self._make_layer(block, 64, layers[0])
         self.layer2 = self._make_layer(
             block, 128, layers[1], stride=2, dilate=replace_stride_with_dilation[0]
@@ -200,12 +206,13 @@ class ResNet(nn.Module):
         self.fc = nn.Linear(512 * block.expansion, num_classes)
 
         # * testing without kaiming_normal initialization
-        # for m in self.modules():
-        #     if isinstance(m, Conv2dWrap):
-        #         nn.init.kaiming_normal_(m.wrap.weight, mode="fan_out", nonlinearity="relu")
-        #     elif isinstance(m, (nn.BatchNorm2d, nn.GroupNorm)):
-        #         nn.init.constant_(m.weight, 1)
-        #         nn.init.constant_(m.bias, 0)
+        if not self.small_input:
+            for m in self.modules():
+                if isinstance(m, Conv2dWrap):
+                    nn.init.kaiming_normal_(m.wrap.weight, mode="fan_out", nonlinearity="relu")
+                elif isinstance(m, (nn.BatchNorm2d, nn.GroupNorm)):
+                    nn.init.constant_(m.weight, 1)
+                    nn.init.constant_(m.bias, 0)
 
         # # Zero-initialize the last BN in each residual branch,
         # # so that the residual branch starts with zeros, and each residual block behaves like an identity.
@@ -271,7 +278,8 @@ class ResNet(nn.Module):
         x = self.conv1(x)
         x = self.bn1(x)
         x = self.relu(x)
-        # x = self.maxpool(x)
+        if not self.small_input:
+            x = self.maxpool(x)
 
         x = self.layer1(x)
         x = self.layer2(x)
@@ -289,8 +297,13 @@ class ResNet(nn.Module):
 
         return x
 
-    def forward(self, x: Tensor) -> Tensor:
-        return self._forward_impl(x)
+    def forward(self, x: Tensor, return_features=False) -> Tensor:
+        features = self.feature_map(x)
+        out = self.fc(features)
+        if return_features:
+            return features, out
+        else:
+            return out
 
     # ------- for regularization ---------
     def _chain_generators(self, *generators):
@@ -359,21 +372,21 @@ class ResNet(nn.Module):
 
 
 # ========== concrete initializations ========
-def ResNet18(num_classes=10, nl=nn.GELU()):
-    return ResNet(BasicBlock, [2, 2, 2, 2], num_classes=num_classes)
+def ResNet18(num_classes=10, nl=nn.ReLU(), small_input=True):
+    return ResNet(BasicBlock, [2, 2, 2, 2], num_classes=num_classes, small_input=small_input)
 
 
-def ResNet34(num_classes=10, nl=nn.GELU()):
-    return ResNet(BasicBlock, [3, 4, 6, 3], num_classes=num_classes)
+def ResNet34(num_classes=10, nl=nn.ReLU(), small_input=True):
+    return ResNet(BasicBlock, [3, 4, 6, 3], num_classes=num_classes, small_input=small_input)
 
 
-def ResNet50(num_classes=10, nl=nn.GELU()):
-    return ResNet(Bottleneck, [3, 4, 6, 3], num_classes=num_classes)
+def ResNet50(num_classes=10, nl=nn.ReLU(), small_input=True):
+    return ResNet(Bottleneck, [3, 4, 6, 3], num_classes=num_classes, small_input=small_input)
 
 
-def ResNet101(num_classes=10, nl=nn.GELU()):
-    return ResNet(Bottleneck, [3, 4, 23, 3], num_classes=num_classes)
+def ResNet101(num_classes=10, nl=nn.ReLU(), small_input=True):
+    return ResNet(Bottleneck, [3, 4, 23, 3], num_classes=num_classes, small_input=small_input)
 
 
-def ResNet152(num_classes=10, nl=nn.GELU()):
-    return ResNet(Bottleneck, [3, 8, 36, 3], num_classes=num_classes)
+def ResNet152(num_classes=10, nl=nn.ReLU(), small_input=True):
+    return ResNet(Bottleneck, [3, 8, 36, 3], num_classes=num_classes, small_input=small_input)

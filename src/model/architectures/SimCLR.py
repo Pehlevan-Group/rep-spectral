@@ -23,7 +23,6 @@ class SimCLR(nn.Module):
         super().__init__()
         # feature map
         self.backbone = backbone
-        self.feature_map = backbone.feature_map
         # projection head
         in_feat_dim = backbone.fc.in_features
         self.proj_head = nn.Sequential(
@@ -33,6 +32,9 @@ class SimCLR(nn.Module):
         # prepare
         self.mask = self._get_mask(bs)
         self.label_match = self._get_label_match(bs)
+
+    def feature_map(self, x: torch.Tensor) -> torch.Tensor:
+        return self.backbone.feature_map(x)
 
     def _get_label_match(self, bs: int) -> torch.BoolTensor:
         """

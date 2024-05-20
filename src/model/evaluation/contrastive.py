@@ -49,6 +49,7 @@ def _train_downstream_logistic_regression(
     lr = LogisticRegression(solver="lbfgs", n_jobs=-1, random_state=random_state).fit(
         train_features, train_labels
     )
+    print(f"fit acc: {lr.score(train_features, train_labels):.4f}")
     return lr
 
 
@@ -99,9 +100,25 @@ class LogisticRegressionTorch(nn.Module):
         self.softmax = nn.Softmax(dim=-1)
 
     @torch.no_grad()
-    def forward(self, X: torch.Tensor) -> torch.Tensor:
+    def _forward_multiclass(self, X: torch.Tensor) -> torch.Tensor:
         result = self.softmax(X @ self.coefs.T + self.intercept)
         return result
+
+    @torch.no_grad()
+    def _forward_binary(self, X: torch.Tensor) -> torch.Tensor:
+        """manually create probabilities belonging to zero/one"""
+        out = X @ self.coefs.T + self.intercept
+        prob1 = 1 / (1 + torch.exp(-out))
+        prob0 = 1 - prob1
+        result = torch.hstack([prob0, prob1])
+        return result
+
+    def forward(self, X: torch.Tensor) -> torch.Tensor:
+        # binary
+        if len(self.intercept) == 1:
+            return self._forward_binary(X)
+        else:
+            return self._forward_multiclass(X)
 
 
 class ContrastiveWrap(nn.Module):

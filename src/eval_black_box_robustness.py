@@ -77,6 +77,9 @@ parser.add_argument('--perturb-vmax', default=0.5, type=float, help='the perturb
 parser.add_argument('--perturb-vmin', default=-0.5, type=float, help='the pertrubation range for high dimension adversarial sample discovery')
 parser.add_argument('--no-shuffle', default=False, action='store_true', help='true to turn off data shuffling in evaluation sampling')
 
+# ========= retrain downstream evaluations ===============
+parser.add_argument("--new-head", default=False, action="store_true", help='true to retrain head using multilogistic regression')
+
 args = parser.parse_args()
 
 torch.manual_seed(args.seed)
@@ -161,6 +164,11 @@ model.load_state_dict(
 )
 model.eval()
 
+# wrap model 
+if args.new_head:
+    from model import ContrastiveWrap
+    model = ContrastiveWrap(model, train_loader, device=device, random_state=args.seed)
+
 # get attacker
 def get_attacker():
     if args.attacker == 'TangentAttack':
@@ -192,8 +200,14 @@ def get_samples() -> Tuple[torch.Tensor]:
             correct_samples = torch.cat([correct_samples, X[(y != args.target) & (y_pred.eq(y))].to('cpu')])
         else:
             correct_samples = torch.cat([correct_samples, X[y_pred.eq(y)].to('cpu')])
-            if len(correct_samples) >= args.eval_sample_size: break
 
+            # * intercept here, if new head, then would like to see the test performance
+            if len(correct_samples) >= args.eval_sample_size and not args.new_head: break
+        
+    # * display test performance 
+    if args.new_head:
+        print(f"test acc: {len(correct_samples) / len(test_set):.4f}")
+    
     # keep first eval_sample_size many samples    
     correct_samples = correct_samples[:args.eval_sample_size]
     if len(target_samples) == 0: target_samples = None # for untargeted attack, change to None
@@ -223,9 +237,12 @@ def attack_all(samples: torch.Tensor, target_samples: torch.Tensor) -> List[floa
 def record(dists: List[float]):
     """dump computed distance to files"""
     series = pd.Series(dists)
+    csv_log_name = f'black_box_l2_e{args.eval_epoch}_{args.attacker}_tar{args.target}_T{args.T}_tol{args.tol}'
+    if args.new_head:
+        csv_log_name += "_newhead"
     series.to_csv(
         os.path.join(paths['result_dir'],  base_log_name if args.reg == "None" else log_name, 
-        f'black_box_l2_e{args.eval_epoch}_{args.attacker}_tar{args.target}_T{args.T}_tol{args.tol}.csv')
+        f'{csv_log_name}.csv')
     )
 
 @torch.no_grad()

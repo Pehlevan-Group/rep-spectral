@@ -70,6 +70,11 @@ parser.add_argument('--log-model', default=20, type=int, help='model logging fre
 # technical
 parser.add_argument('--tag', default='exp', type=str, help='the tag of batch of exp')
 parser.add_argument('--seed', default=401, type=int, help='the random init seed')
+
+# using custom pretrained model 
+parser.add_argument('--custom-pretrain', default=False, action='store_true', help='true to turn on reading from custom generated weights')
+parser.add_argument("--pretrain-wt-path", type=str, help='the pretrain weight paths to load model from')
+
 args = parser.parse_args()
 
 torch.manual_seed(args.seed)
@@ -84,8 +89,9 @@ if args.reg_freq_update is not None:
 
 # set up summary writer
 log_name, base_log_name = get_logging_name(args, 'finetune')
-if args.reg == "None": log_name = base_log_name
-model_path = os.makedirs(os.path.join(paths['model_dir'], log_name), exist_ok=True)
+if "None" in args.reg: log_name = base_log_name
+model_path = os.path.join(paths['model_dir'], log_name)
+os.makedirs(model_path, exist_ok=True)
 writer = SummaryWriter(os.path.join(paths['result_dir'], log_name))
 
 # load data
@@ -110,6 +116,11 @@ def load_data():
         train_set, test_set = cifar10(paths['data_dir'])
         num_classes = 10
         h = w = 32
+    elif args.data == 'cifar10_resized':
+        from data import cifar10_resized
+        train_set, test_set = cifar10_resized(paths['data_dir'])
+        num_classes = 10
+        h = w = 224
     else:
         raise NotImplementedError(f"{args.data} is not available")
     return train_set, test_set, num_classes, (h, w)
@@ -122,22 +133,66 @@ test_loader = DataLoader(test_set, batch_size=args.batch_size * 4, shuffle=False
 print(f'{args.data} data loaded')
 
 # get model
-model = ResNet50Pretrained(
-    num_classes, 
-    small_conv1=args.data=='cifar10' # change 'conv1' layer for small dimensional data
-).to(device)
+if args.custom_pretrain:
+    from model import ResNet50
+    model = ResNet50(1000, small_input=(args.data == "cifar10")).to(device)
+    backbone_parameters = list(model.parameters())[:-2]
+    fc_parameters = list(model.parameters())[-2:]
+    # TODO: check if registered properly
+    print("initialize with ResNet50")
+else:
+    model = ResNet50Pretrained(
+        num_classes, 
+        small_conv1=args.data=='cifar10' # change 'conv1' layer for small dimensional data
+    ).to(device)
+    backbone_parameters = model.model.parameters()
+    fc_parameters = model.fc.parameters()
+
+# initialize
+if args.custom_pretrain:
+    pbar = tqdm(range(args.epochs + 1))
+
+    # load from custom pretrained model
+    # ! hard code path, change to regularized here
+    model.load_state_dict(
+        # torch.load("/n/pehlevan_lab/Users/shengy/geometry/GeomNet/model/pretrain/imagenet1k_m50_bs128_lr0.02_optSGD_wd0.0001_mom0.9_nlReLU_regNone_e120_seed0/model_e120.pt",
+        # torch.load("/n/pehlevan_lab/Users/shengy/geometry/GeomNet/model/pretrain/imagenet1k_m50_bs128_lr0.02_optSGD_wd0.0001_mom0.9_nlReLU_lam0.001_reg['eig-ub']_e120_b80_seed0_rf1_ru80/model_e120.pt",
+        torch.load(args.pretrain_wt_path,
+        map_location=device),
+    )
+    # change output dimension
+    model.fc = nn.Linear(model.fc.in_features, num_classes, bias=True, device=device)
+
+    print("loading from custom pretrained model")
+else:
+    if "None" in args.reg:
+        pbar = tqdm(range(args.epochs + 1))
+    else:
+        # start training from burnin (empty pass for learning rates scheduling)
+        pbar = tqdm(range(args.epochs + 1))
+
+        # load model
+        try:
+            model.load_state_dict(
+                torch.load(os.path.join(paths['model_dir'], base_log_name, f'model_e{args.burnin}.pt'),
+                            map_location=device),
+            )
+        except:
+            warnings.warn(f"Not finding base model {base_log_name}, retraining ...")
+            # relapse back to full training
+            pbar = tqdm(range(args.epochs + 1))
 
 # get optimizer 
 # backbone parameters
 opt_backbone = getattr(optim, args.opt)(
-    model.model.parameters(), 
-    lr=args.lr / 10,  # * much smaller learning rate for the pretraiend layers
+    backbone_parameters,
+    lr=args.lr / 5,  # ! much smaller learning rate for the pretraiend layers
     weight_decay=args.wd, 
     momentum=args.mom
 )
 # fully connected linear head
 opt_fc = getattr(optim, args.opt)(
-    model.fc.parameters(), 
+    fc_parameters, 
     lr=args.lr, 
     momentum=args.mom, 
     weight_decay=args.wd
@@ -145,6 +200,8 @@ opt_fc = getattr(optim, args.opt)(
 if args.schedule:
     scheduler_backbone = optim.lr_scheduler.CosineAnnealingLR(opt_backbone, T_max=args.tmax)
     scheduler_fc = optim.lr_scheduler.CosineAnnealingLR(opt_fc, T_max=args.tmax)
+
+loss_fn = nn.CrossEntropyLoss()
 
 # init model singular values if using power iteration
 if args.iterative:
@@ -156,7 +213,7 @@ if args.iterative:
             max_layer = 4
         
         # set up initial guess dump path
-        dump_path = os.path.join(paths["model_dir"], f"resnet50pt_{h}_{w}_right_v_init")
+        dump_path = os.path.join(model_path, f"resnet50pt_{h}_{w}_right_v_init")
         os.makedirs(dump_path, exist_ok=True)
         v_init = init_model_right_singular_conv(
             model, tol=args.eps, h=h, w=w, max_layer=max_layer, 
@@ -212,35 +269,24 @@ def update_conv(model: ResNet50Pretrained):
 # ================= main driver training functions =================
 def train():
     """train a model with/without regularization"""
-    loss_fn = nn.CrossEntropyLoss()
-
-    # initialize
-    if "None" in args.reg:
-        pbar = tqdm(range(args.epochs + 1))
-    else:
-        # start training from burnin
-        pbar = tqdm(range(args.burnin, args.epochs + 1))
-
-        # load model
-        try:
-            model.load_state_dict(
-                torch.load(os.path.join(paths['model_dir'], base_log_name, f'model_e{args.burnin}.pt'),
-                           map_location=device),
-            )
-        except:
-            warnings.warn('Not finding base model, retraining ...')
-            # relapse back to full training
-            pbar = tqdm(range(args.epochs + 1))
 
     # training
     for i in pbar:
+        # update scheduling rate
+        if args.schedule:
+            scheduler_backbone.step(i)
+            scheduler_fc.step(i)
+        
         model.train()
         total_train_loss, total_train_acc = 0, 0
         for param_update_count, (X_train, y_train) in enumerate(train_loader):
             X_train, y_train = X_train.to(device), y_train.to(device)
             opt_backbone.zero_grad()
             opt_fc.zero_grad()
-            features, y_pred_logits = model(X_train)
+            if args.custom_pretrain:
+                features, y_pred_logits = model.forward(X_train, return_features=True)
+            else:
+                features, y_pred_logits = model(X_train)
             train_loss = loss_fn(y_pred_logits, y_train)
 
             # add hard stop if nan
@@ -285,7 +331,10 @@ def train():
                 total_test_loss, total_test_acc = 0, 0
                 for X_test, y_test in test_loader:
                     X_test, y_test = X_test.to(device), y_test.to(device)
-                    _, y_test_pred_logits = model(X_test)
+                    if args.custom_pretrain:
+                        y_test_pred_logits = model.forward(X_test)
+                    else:
+                        _, y_test_pred_logits = model(X_test)
                     test_loss = loss_fn(y_test_pred_logits, y_test)
 
                     total_test_loss += test_loss * len(X_test)

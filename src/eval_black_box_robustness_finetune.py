@@ -47,6 +47,7 @@ parser.add_argument('--reg-freq', default=1, type=int, help='the frequency of im
 parser.add_argument('--reg-freq-update', default=None, type=int, 
                     help='the frequency of imposing convolution singular value regularization per parameter update: None means reg every epoch only'
                     )
+parser.add_argument("--custom-pretrain", default=False, action='store_true', help='True to turn on custom pretrain')
 
 # # iterative singular 
 parser.add_argument('--iterative', action='store_true', default=False, help='True to turn on iterative method')
@@ -109,6 +110,10 @@ def load_data():
         from data import cifar10
         train_set, test_set = cifar10(paths['data_dir'])
         num_classes = 10
+    elif args.data == 'cifar10_resized':
+        from data import cifar10_resized
+        train_set, test_set = cifar10_resized(paths['data_dir'])
+        num_classes = 10
     else:
         raise NotImplementedError(f"{args.data} is not available")
     return train_set, test_set, num_classes
@@ -122,18 +127,23 @@ print(f'{args.data} data loaded')
 
 # get model
 def load_model():
-    model_base = ResNet50Pretrained(
-        num_classes,
-        small_conv1=args.data=='cifar10' # change 'conv1' layer for small dimensional data
-    ).to(device)
+    if args.custom_pretrain:
+        from model import ResNet50
+        model_base = ResNet50(num_classes, small_input=args.data=='cifar10').to(device)
+    else:
+        model_base = ResNet50Pretrained(
+            num_classes,
+            small_conv1=args.data=='cifar10' # change 'conv1' layer for small dimensional data
+        ).to(device)
 
     model_base.load_state_dict(
         torch.load(
-            os.path.join(paths["model_dir"], base_log_name if args.reg == "None" else log_name, f"model_e{args.eval_epoch}.pt"),
+            os.path.join(paths["model_dir"], base_log_name if "None" in args.reg else log_name, f"model_e{args.eval_epoch}.pt"),
             map_location=device
         )
     )
     model_base.eval()
+    if args.custom_pretrain: return model_base
     model = TransferWrap(model_base) # discard feature representations while calling forward
     return model
 
@@ -202,7 +212,7 @@ def record(dists: List[float]):
     """dump computed distance to files"""
     series = pd.Series(dists)
     series.to_csv(
-        os.path.join(paths['result_dir'],  base_log_name if args.reg == "None" else log_name, 
+        os.path.join(paths['result_dir'],  base_log_name if "None" in args.reg else log_name, 
         f'black_box_l2_e{args.eval_epoch}_{args.attacker}_tar{args.target}_T{args.T}_tol{args.tol}.csv')
     )
 
