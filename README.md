@@ -1,4 +1,4 @@
-# GeomNet
+# rep-spectral: spectral regularization up to feature space
 
 Introduce `rep-spectral`, a spectral regularization up to feature space to encourage learning robust feature representations. Testing with
 
