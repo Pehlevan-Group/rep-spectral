@@ -7,6 +7,8 @@ Introduce `rep-spectral`, a spectral regularization up to feature space to encou
 - BarlowTwins ResNet1 on CIFAR10
 - Transfer Learning pretrained on imagenet and finetune on CIFAR10, Stanford Dog, Oxford Flowers, and MIT indoor.
 
+For details, see our preprint [arXiv:2405.17181](https://arxiv.org/abs/2405.17181).
+
 ## Running Instruction
 
 Recommended to have ```python >= 3.8``` installed, and make a virtual env
@@ -50,3 +52,17 @@ To run unit tests, at root, do the following:
 cd tests/
 pytest .
 ```
+
+## Acknowledgement
+
+If you find this code useful, please consider citing our preprint: 
+
+    @article{yang2024spectral,
+      title={Spectral regularization for adversarially-robust representation learning}, 
+      author={Yang, Sheng and Zavatone-Veth, Jacob A. and Pehlevan, Cengiz},
+      year={2024},
+      journal={arXiv preprint},
+      eprint={2405.17181},
+      archivePrefix={arXiv},
+      primaryClass={cs.LG}
+    }
